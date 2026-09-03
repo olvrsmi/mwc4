@@ -5,10 +5,10 @@
   "type": "module",
   "description": "Office 4B, 6 Mackenzie Walk - a turn-based quantum trading game, renderer agnostic",
   "scripts": {
-    "start": "node host/server.mjs",
-    "dev": "node --watch host/server.mjs",
-    "fake": "MW_MODEL=fake node host/server.mjs",
-    "moth": "MW_MODEL=http node host/server.mjs",
+    "start": "node client-http/server.mjs",
+    "dev": "node --watch client-http/server.mjs",
+    "fake": "MW_MODEL=fake node client-http/server.mjs",
+    "moth": "MW_MODEL=http node client-http/server.mjs",
     "doctor": "node test/doctor.mjs",
     "test": "node test/selftest.mjs",
     "copy-check": "node test/copy-check.mjs",
@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.60",
+    "grammy": "^1.46.0",
     "yaml": "^2.9.0"
   },
   "engines": {

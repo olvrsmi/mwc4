@@ -19,7 +19,8 @@ are installed alongside.
 
 ## Everything else
 
-`core/`, `host/`, `client/`, `test/`, `model/engine.py` and the documentation
+`core/`, `host/`, `client-http/`, `client-telegram/`, `test/`, `model/engine.py`
+and the documentation
 are original to this repository. The npm dependencies (`yaml`,
-`@napi-rs/canvas`) are MIT-licensed and pulled at install time rather than
+`@napi-rs/canvas`, `grammy`) are MIT-licensed and pulled at install time rather than
 vendored. No licence has been chosen for this repository yet.

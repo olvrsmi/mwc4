@@ -13,11 +13,30 @@
 // angle brackets or box-drawing glyphs, and renders them as tofu.
 
 import { createCanvas, GlobalFonts } from '@napi-rs/canvas'
+import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const FONTS = join(HERE, 'fonts')
+export const ART = join(HERE, 'art')
+
+/**
+ * The file behind an `art:` name, or null if there is none.
+ *
+ * A missing picture is not an error: a scene has to be writable before it is
+ * drawn, so a name with no file plays as its line alone. The name is checked
+ * against a strict pattern first, because it comes from copy.yaml and is about
+ * to be joined onto a path.
+ */
+export function artPath (name) {
+  if (!name || !/^[\w-]+$/.test(name)) return null
+  for (const ext of ['png', 'jpg', 'jpeg', 'webp', 'gif']) {
+    const file = join(ART, `${name}.${ext}`)
+    if (existsSync(file)) return file
+  }
+  return null
+}
 for (const file of ['RobotoCondensed[wght].ttf', 'RobotoMono[wght].ttf']) {
   try { GlobalFonts.registerFromPath(join(FONTS, file)) } catch {
     console.warn(`  render: could not load ${file}; falling back to a system font`)

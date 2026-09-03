@@ -46,20 +46,25 @@ mackenziewalk_04/
     pricing.mjs     readings to quotes, the prospectus, the sheet
     fake-model.mjs  invented physics, so everything runs without Python
     copy.yaml       every word the player reads
-  model/     the physics: QDrive, spoken as JSON over stdio
-    engine.py       ops: worlds, step, scout
-    specs/          46 world specifications and their cached character
-  host/      the Node host for the HTML client
-    server.mjs      HTTP + JSON, sessions, PNG rendering, static files
-    specs.mjs       reads model/specs in JavaScript, for every backend
-    model-local.mjs the physics via model/engine.py
-    model-http.mjs  the physics via the Moth API's qdrive-api-v1 engine
-    render.mjs      a traces emission drawn as a PNG
-    store.mjs       one JSON file per session
-    art/ fonts/     pictures the scenes name; the chart's typefaces
-  client/    index.html + app.js: default styling, a border per message
-  test/      selftest, copy-check, dryrun
+  model/           the physics: QDrive, spoken as JSON over stdio
+    engine.py        ops: worlds, step, scout
+    specs/           46 world specifications and their cached character
+  host/            what every renderer needs, and nothing about any one of them
+    setup.mjs        assembles rules, copy, worlds, physics, game, store
+    specs.mjs        reads model/specs in JavaScript, for every backend
+    model-local.mjs  the physics via model/engine.py
+    model-http.mjs   the physics via the Moth API's qdrive-api-v1 engine
+    render.mjs       a traces emission drawn as a PNG, and the art lookup
+    store.mjs        one JSON file per session
+    art/ fonts/      pictures the scenes name; the chart's typefaces
+  client-http/     a web page. server.mjs, index.html, app.js
+  client-telegram/ a Telegram bot. bot.mjs, sticker.mjs
+  test/            selftest, copy-check, dryrun, doctor
 ```
+
+Two clients, one game. Each owns its entry point and nothing else knows it
+exists: `host/setup.mjs` assembles the same pieces for both, and every
+difference between them is in how an emission becomes something a person sees.
 
 ## Setup
 
