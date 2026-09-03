@@ -1,5 +1,19 @@
 # Office 4B, 6 Mackenzie Walk
 
+## Quick Installation
+There's fuller, Claude steps below but in an ideal world to run the game core 
+and client quickly, locally, with underlying QDrive taken care of on the Moth 
+API, run:
+
+```
+npm ci     
+python3.14 -m venv model/.venv 
+model/.venv/bin/pip install -r model/requirements.txt
+npm start
+```
+
+## Overview
+
 A turn-based trading game played against small quantum systems. You carry one
 qubit; each world is a quantum circuit you may enter. Watch it, stake the day's
 budget on one of its holdings, and hold: your qubit couples to that holding
