@@ -36,18 +36,28 @@ mackenziewalk_04/
 ## Setup
 
 ```
-npm install
-cp .env.example .env            # pick a model backend, see below
-npm start                       # http://localhost:5090
+npm ci                          # node 20; .nvmrc names it
+npm run doctor                  # what, if anything, is still missing
+npm run fake                    # http://localhost:5090, no other setup at all
 ```
+
+`npm run fake` plays the whole game against invented physics, so a fresh clone
+is one command from running. The other two backends need something this
+repository cannot carry; `npm run doctor` says which, where it looked, and what
+to run next.
 
 Three physics backends, chosen with `MW_MODEL`:
 
 | | | |
 |---|---|---|
-| `fake` | invented, deterministic trajectories | no Python, no network. `npm run fake` |
+| `fake` | invented, deterministic trajectories | needs nothing. `npm run fake` |
 | `local` | `model/engine.py` in a Python of your own | the default |
-| `http` | the Moth API's `qdrive-api-v1` engine | needs a key; one credit a step |
+| `http` | the Moth API's `qdrive-api-v1` engine | needs a key; a credit a step |
+
+```
+cp .env.example .env            # pick a backend and fill in what it needs
+npm start
+```
 
 For `local`, the Python needs `model/requirements.txt` plus Moth's QDrive, and
 `MW_QDRIVE_API_SRC` pointing at a qdrive-api checkout's `src/` (a checkout at
@@ -59,9 +69,35 @@ model/.venv/bin/pip install -r model/requirements.txt
 model/.venv/bin/pip install -e /path/to/QDrive
 ```
 
-`model/.venv` is found automatically; `MW_PYTHON` overrides. For `http`, put
-the key in `MW_MOTH_KEY` or name a file holding it in `MW_MOTH_KEY_FILE`. The
-host checks the engine is there at boot without spending anything.
+`model/.venv` is found automatically; `MW_PYTHON` overrides, and pointing it at
+the interpreter you mean is usually necessary — whatever `python3` is on PATH is
+rarely new enough. For `http`, put the key in `MW_MOTH_KEY` or name a file
+holding it in `MW_MOTH_KEY_FILE`. The host checks the engine is there at boot
+without spending anything.
+
+## Dependencies
+
+Everything the game needs at runtime is committed except the two private Python
+packages, which no clone of this repository can fetch:
+
+| | | |
+|---|---|---|
+| node packages | `package.json` + `package-lock.json` | `npm ci` reproduces them exactly, native chart binaries for every platform included |
+| node itself | `.nvmrc` | 20; `package.json` accepts 18 and up |
+| the words | `core/copy.yaml` | committed |
+| the worlds | `model/specs/*.json` | committed, with `_stats_cache.json` — the volatility the prospectus quotes, which costs minutes to recompute |
+| art and fonts | `host/art/`, `host/fonts/` | committed, so a chart looks the same everywhere |
+| python packages | `model/requirements.txt` | current releases; `model/requirements.lock.txt` pins an environment known to work, and names the Python version |
+| **QDrive** | github.com/moth-quantum/QDrive | **private.** Clone it, then `pip install -e /path/to/QDrive` |
+| **qdrive-api** | github.com/moth-quantum/qdrive-api | **private.** Clone it and point `MW_QDRIVE_API_SRC` at its `src/`. Never pip-installed — its modules are flat and one is called `engine.py` |
+
+Not committed, and deliberately: `.env` (`.env.example` shows its shape),
+`host/state/` (saved games and rendered charts, created on demand), and
+`node_modules/`, `.venv/`, `__pycache__/`.
+
+Never put a credential in a pip URL. Pip records the URL verbatim in the
+installed metadata, so a token in one comes back out of every later
+`pip freeze` — which is exactly how such a thing reaches a committed file.
 
 ## Time
 
@@ -193,11 +229,16 @@ local Python.
 ## Checking
 
 ```
+npm run doctor           # what this machine is missing for the backend you picked
 npm test                 # the rules, the copy engine, the backends, the chart - no Python
 npm run copy-check       # copy.yaml, both directions
 npm run dryrun           # a round in the terminal; --model local|http, --png <dir>
 npm run model-test       # the physics, against the real engine
 ```
+
+`npm test` and `npm run copy-check` need nothing but `npm ci`, so they run on a
+fresh clone and in CI. `npm run model-test` and `npm run warm` need the local
+Python; `npm run dryrun --model http` spends credits.
 
 ## Third-party code
 

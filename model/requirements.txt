@@ -1,17 +1,21 @@
-# The QDrive engine, driven by model/engine.py.
+# The Python behind model/engine.py.
 #
-# Both repositories are private and this one is public, so neither is vendored
-# here the way QuantumGraph was - and neither is cloned on the box, which would
-# need deploy keys on repositories we do not administer. deploy.sh sends a
-# checkout of each from a machine that already has them, into vendor/ beside the
-# app; MW_QDRIVE_API_SRC then points at qdrive-api's src/.
-#
-#   pip install -r requirements.txt
+#   python3 -m venv .venv                        # 3.12 or newer
+#   .venv/bin/pip install -r requirements.txt
+#   .venv/bin/pip install -e /path/to/QDrive     # see below
 #   export MW_QDRIVE_API_SRC=/path/to/qdrive-api/src
 #
-# qdrive-api itself is NOT pip-installed: its modules are flat in src/ (engine.py
-# does `from backend import ...`), and one of them is called engine.py, same as
-# this directory's. It is loaded from an explicit path instead.
+# Only MW_MODEL=local needs any of this. MW_MODEL=fake runs the whole game with
+# no Python at all, and MW_MODEL=http puts the physics on the Moth API instead.
+#
+# requirements.lock.txt pins every version of an environment known to work,
+# including the two private checkouts' commits. Install from that one to
+# reproduce it exactly; install from this one to take current releases.
+#
+# PYTHON VERSION MATTERS. QDrive needs 3.12 or newer, and qiskit is fussy about
+# patch releases besides: 3.10.7 raises a TypeError inside qiskit.passmanager on
+# import where 3.10.13 is fine. Whatever `python3` happens to be on PATH is
+# unlikely to be the right one, so point MW_PYTHON at the interpreter you mean.
 
 qiskit>=2.5.1
 qiskit-aer>=0.17.2
@@ -21,14 +25,28 @@ pydantic>=2.13.4
 # qiskit does not ship the QASM3 *parser*.
 qiskit-qasm3-import>=0.6.0
 
-# Moth's QDrive is deliberately NOT listed here. It is installed from a checkout,
-# on the box and on a laptop alike:
+# ---------------------------------------------------------------------------
+# The two private ones, which are deliberately not lines in this file
+# ---------------------------------------------------------------------------
+#
+# QDrive — github.com/moth-quantum/QDrive — is installed from a checkout:
 #
 #   pip install -e /path/to/QDrive
 #
-# Listing it as `qdrive @ git+ssh://...` meant every reader of this file had to
-# filter that line back out, and a filter that missed one `@` line word-split it
-# into a bare `@` argument and a baffling pip error. One mechanism instead.
+# Naming it here as `qdrive @ git+ssh://...` meant every reader had to filter
+# that line back out, and a filter that missed one `@` word-split it into a bare
+# `@` argument and a baffling pip error. One mechanism instead. Never pass a
+# credential in that URL: pip records the URL verbatim in the installed
+# metadata, so a token in it leaks into every later `pip freeze`.
 #
-# Do NOT `pip install qdrive` - that PyPI name is an unrelated QHarbor library
+# Do NOT `pip install qdrive` — that PyPI name is an unrelated QHarbor library
 # which imports cleanly while being entirely the wrong thing.
+#
+# qdrive-api — github.com/moth-quantum/qdrive-api — is not pip-installed at all.
+# Its modules are flat in src/ (`from backend import ...`) and one of them is
+# called engine.py, same as this directory's, so engine.py loads it from an
+# explicit path instead. Clone it and point MW_QDRIVE_API_SRC at its src/.
+# A checkout at ../../coupling-playground/qdrive-api is found without being told.
+#
+# Both repositories are private, so a clone of this one cannot fetch them.
+# `npm run doctor` says which of the two are missing, and where it looked.
