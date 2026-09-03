@@ -8,6 +8,7 @@
     "start": "node host/server.mjs",
     "dev": "node --watch host/server.mjs",
     "fake": "MW_MODEL=fake node host/server.mjs",
+    "moth": "MW_MODEL=http node host/server.mjs",
     "doctor": "node test/doctor.mjs",
     "test": "node test/selftest.mjs",
     "copy-check": "node test/copy-check.mjs",

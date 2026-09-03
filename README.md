@@ -1,16 +1,30 @@
 # Office 4B, 6 Mackenzie Walk
 
-## Quick Installation
-There's fuller, Claude steps below but in an ideal world to run the game core 
-and client quickly, locally, with underlying QDrive taken care of on the Moth 
-API, run:
+## Quick installation
+
+Fuller steps are further down. To run the game core and the client locally with
+QDrive taken care of on the Moth API, which needs no Python at all:
 
 ```
-npm ci     
-python3.14 -m venv model/.venv 
-model/.venv/bin/pip install -r model/requirements.txt
-npm start
+npm ci
+cp .env.example .env       # paste your Moth key into MW_MOTH_KEY
+npm run moth               # http://localhost:5090
 ```
+
+`.env.example` already selects the Moth API, so `npm start` does the same thing
+once the key is in; `npm run moth` picks that backend whatever the file says.
+Every engine call spends a credit, and a held step makes two of them.
+
+To run with no key, no network and no Python, against invented physics:
+
+```
+npm ci
+npm run fake
+```
+
+`npm run doctor` says what either path is still missing. The local backend,
+which runs the real QDrive on your own machine, needs Python and two private
+repositories; see [Setup](#setup) below.
 
 ## Overview
 
