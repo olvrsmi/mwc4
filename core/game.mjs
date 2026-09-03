@@ -807,11 +807,22 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   }
 
   /** What the player may send next. Every entry is a token they could type. */
+  /**
+   * What the player may send next.
+   *
+   * Each entry says where it came from. A renderer that shows them all in one
+   * undifferentiated row leaves the player unable to tell why answering a
+   * conversation was what their keystroke did: a beat's choices sit alongside
+   * the game's, and a beat token would shadow a game command of the same name.
+   *
+   * This is read in error paths, so it must not be the thing that throws. Every
+   * case guards its own reach into the session.
+   */
   function choices (S) {
     const scene = story.sequenceChoices(C, S)
-    if (scene.length) return scene
-    const out = [...story.beatChoices(C, S)]
-    const push = (token, label) => out.push({ token, label })
+    if (scene.length) return scene.map((c) => ({ ...c, kind: 'scene' }))
+    const out = story.beatChoices(C, S).map((c) => ({ ...c, kind: 'beat' }))
+    const push = (token, label) => out.push({ token, label, kind: 'game' })
     switch (S.expect) {
       case 'world':
         ;(S.worlds || []).forEach((w, i) =>
@@ -837,6 +848,9 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
         }
         break
       case 'exit': {
+        // guarded like the rest: a turn that threw part-way can leave `expect`
+        // here with no world, and this is read while reporting that failure
+        if (!S.world) break
         const k = S.world.z.length - 1
         const last = S.world.readouts - 1
         for (let r = k + 1; r <= last; r++) {

@@ -17,7 +17,16 @@ if (existsSync(path)) {
     if (eq < 1) continue
     const key = line.slice(0, eq).trim()
     let val = line.slice(eq + 1).trim()
-    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) val = val.slice(1, -1)
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1)
+    } else {
+      // An unquoted value ends where a trailing comment begins. Without this,
+      // `TELEGRAM_BOT_TOKEN=123:ABC # the deployed one` carries ' # the
+      // deployed one' into the token, and Telegram answers 401 as though the
+      // token itself were wrong. Quote the value to keep a literal hash.
+      const hash = val.search(/\s#/)
+      if (hash >= 0) val = val.slice(0, hash).trim()
+    }
     if (process.env[key] === undefined) process.env[key] = val   // the real environment wins
   }
 }

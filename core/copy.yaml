@@ -177,6 +177,10 @@ prompts:
   # shown when a player types something a running scene has no answer for
   scene_waiting: _Someone is still talking. Answer them, or **skip**._
   nothing_to_decide: Nothing to decide just now.
+  # A chat client leaves every keyboard it has ever sent tappable, and the
+  # same token means different things in different moments - so a tap on an
+  # old message is refused rather than acted on. Shown as a toast on the button.
+  stale_button: That moment has passed — use the buttons on the latest message.
 
 buttons:
   invest: Invest

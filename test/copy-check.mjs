@@ -61,8 +61,11 @@ await say('help', 'state', 'zzz', '')
 const seen = copy.recorded
 
 // --- 1. keys referenced in code that copy.yaml does not define -------------
-const sources = ['core/game.mjs', 'core/story.mjs', 'core/pricing.mjs']
-const referenced = new Set(['opening', 'worlds', 'holdings', 'beats.schedule', 'beats.again',
+// Every renderer too: a client asks for words of its own, and a key only it
+// uses would otherwise read as stale and be deleted by the next writer.
+const sources = ['core/game.mjs', 'core/story.mjs', 'core/pricing.mjs', 'host/setup.mjs',
+                 'client-http/server.mjs', 'client-telegram/bot.mjs']
+const referenced = new Set(['opening', 'worlds', 'holdings', 'beats.schedule', 'beats.again', 'help_scene',
                             `sequences.${HELP}`, 'sequences.probation_passed', 'sequences.probation_failed'])
 for (const f of sources) {
   const src = readFileSync(join(ROOT, f), 'utf8')
@@ -98,6 +101,18 @@ function checkTemplate (key, tpl, supplied) {
   }
 }
 
+/**
+ * A choice's key is the token the player sends, and a chat client puts it in a
+ * button's callback data - which Telegram caps at 1 to 64 BYTES and rejects at
+ * send time, not at build time. Caught here instead, where the writer is.
+ */
+function checkToken (where, tok) {
+  const bytes = Buffer.byteLength(String(tok))
+  if (bytes < 1 || bytes > 64) {
+    problems.push(`${where}.${tok} is ${bytes} bytes; a choice key must be 1 to 64 - a button cannot carry it`)
+  }
+}
+
 for (const key of copy.allKeys()) {
   if (key.startsWith('sequences.') || key.startsWith('beats.')) continue     // checked below, with their own contexts
   const v = lookup(key)
@@ -127,6 +142,7 @@ for (const [id, nodes] of Object.entries(source.sequences || {})) {
         for (const [tok, c] of Object.entries(node.choices)) {
           if (!c || typeof c !== 'object') { problems.push(`sequences.${id}[${i}].choices.${tok} is not a choice`); continue }
           if (!c.label) problems.push(`sequences.${id}[${i}].choices.${tok} has no label`)
+          checkToken(`sequences.${id}[${i}].choices`, tok)
           checkTemplate(`sequences.${id}[${i}].choices.${tok}.label`, c.label, ctx)
           checkTemplate(`sequences.${id}[${i}].choices.${tok}.reply`, c.reply, ctx)
         }
@@ -146,6 +162,7 @@ for (const [id, spec] of Object.entries(source.beats || {})) {
   }
   for (const [tok, c] of Object.entries(spec.choices || {})) {
     if (!c?.label) problems.push(`beats.${id}.choices.${tok} has no label`)
+    checkToken(`beats.${id}.choices`, tok)
     checkTemplate(`beats.${id}.choices.${tok}.reply`, c?.reply, new Set(['coherence']))
   }
 }

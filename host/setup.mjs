@@ -128,10 +128,12 @@ export function printBanner (host, what) {
  * session gets a queue of one: a fast tapper waits rather than corrupting their
  * own game. Different sessions never wait on each other.
  *
- * `deliver` is the client's own: it turns the game's emissions into whatever
- * that client shows, and whatever it returns is what the caller gets back. The
- * HTTP client rewrites charts as URLs; the Telegram client sends them and
- * returns them untouched.
+ * `deliver(id, emissions, session)` is the client's own: it turns the game's
+ * emissions into whatever that client shows, and whatever it returns is what
+ * the caller gets back. The HTTP client rewrites charts as URLs; the Telegram
+ * client sends them and returns them untouched. It is handed the session
+ * because a client may need what the game expects NEXT while it is still
+ * sending - a chat client puts the buttons on the last message of the burst.
  *
  * `keepLog` records what was delivered, so a client that has to redraw from
  * nothing can replay it. A chat client does not: the messages are still there.
@@ -163,7 +165,10 @@ export function createSessions (host, {
       const S = game.newSession(seed(id))
       const rec = { session: S, log: [] }
       const r = await game.start(S)
-      const emissions = await deliver(id, r.emissions)
+      // Unlike a turn, this is NOT saved when delivery fails, and deliberately:
+      // the only thing lost is the opening, and playing it again is better than
+      // a player who never saw it being dropped straight into the game.
+      const emissions = await deliver(id, r.emissions, S)
       if (keepLog) rec.log.push(...emissions)
       await store.save(id, rec)
       return { id, rec, fresh: true, emissions, choices: r.choices, summary: r.summary }
@@ -186,15 +191,24 @@ export function createSessions (host, {
       try {
         r = await game.handle(S, text)
       } catch (e) {
+        // The stack, not just the message: a turn that dies quietly looks
+        // exactly like a frozen game, and there is nothing to debug from.
         console.error(`  ${id}: turn failed:`, e?.stack || e?.message || e)
-        const failed = await deliver(id, [{ kind: 'text', text: game.copy.t('scenes.turn_failed') }])
+        const apology = [{ kind: 'text', text: game.copy.t('scenes.turn_failed') }]
+        const failed = await deliver(id, apology, S).catch(() => [])
         if (keepLog) rec.log.push(...failed)
         await store.save(id, rec)
         return { emissions: failed, choices: game.choices(S), summary: game.summary(S), error: String(e?.message || e) }
       }
-      const emissions = await deliver(id, r.emissions)
+      // The game has already moved. Whatever happens while showing it, the new
+      // state has to reach disk, or the player is handed back a turn they have
+      // already spent - the stake gone and the position never opened.
+      let emissions = []
+      let undelivered = null
+      try { emissions = await deliver(id, r.emissions, S) } catch (e) { undelivered = e }
       if (keepLog) rec.log.push(...emissions)
       await store.save(id, rec)
+      if (undelivered) throw undelivered
       return { emissions, choices: r.choices, summary: r.summary }
     })
   }

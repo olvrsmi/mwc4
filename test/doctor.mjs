@@ -181,6 +181,22 @@ head(`the physics — MW_MODEL=${SELECTED}`)
 }
 
 // ---------------------------------------------------------------------------
+head('the clients')
+{
+  ok('browser: ready', 'npm start, or npm run fake for the invented physics')
+  const local = process.env.MW_LOCAL === '1'
+  const which = local ? 'TELEGRAM_BOT_TOKEN_LOCAL' : 'TELEGRAM_BOT_TOKEN'
+  if (process.env[which]) {
+    ok(`telegram: ${which} is set`, 'npm run telegram')
+  } else {
+    // not fatal: the Telegram client is one of two, and nothing else needs it
+    bad(`telegram: ${which} is not set`,
+      'get one from @BotFather and put it in .env. Telegram allows one long poll\n' +
+      '         per token, so a laptop and a server need one each (MW_LOCAL=1 picks the second)', false)
+  }
+}
+
+// ---------------------------------------------------------------------------
 console.log()
 if (fatal) {
   console.log(`  ${fatal} thing(s) needed for MW_MODEL=${SELECTED} are missing${warned ? `, and ${warned} worth a look` : ''}.`)

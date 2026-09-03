@@ -450,6 +450,73 @@ section('help and status')
 }
 
 // ---------------------------------------------------------------------------
+section('what the player types into a scene')
+{
+  ok('a plain answer is kept as given', story.capture('  Ojs  ') === 'Ojs')
+  // the delimiters a renderer's markdown subset uses: left in, they swallow
+  // the emphasis in the author's line around them
+  ok('markdown delimiters are stripped', story.capture('a_b*c`d') === 'abcd')
+  ok('a name that is nothing but delimiters comes back empty', story.capture('___') === '')
+  ok('long answers are capped', story.capture('x'.repeat(200)).length === 60)
+  // sliced by code point: half a surrogate pair would survive into the save
+  // a complete pair ends on a LOW surrogate; a lone HIGH one at the end is the
+  // half-character a naive slice(0, 60) would have left behind
+  const emoji = story.capture('🙂'.repeat(80))
+  ok('an answer of emoji is not cut through a character',
+     [...emoji].length === 60 && !/[\uD800-\uDBFF]$/.test(emoji),
+     `${emoji.length} units, ${[...emoji].length} code points`)
+  ok('and a naive slice would have broken it', /[\uD800-\uDBFF]$/.test('🙂'.repeat(80).slice(0, 61)))
+  ok('and nothing at all is still a string', story.capture(undefined) === '' && story.capture(null) === '')
+
+  const { game, S } = mk(120)
+  await skipOpening(game, S)
+  S.seq = { id: '_ask', at: 0, awaiting: 'ask' }
+  game.copy.section('sequences')._ask = [{ ask: 'name', text: 'who?' }, { text: 'hello {name}' }]
+  const said = story.answerSequence(game.copy, S, ' Ol_ly ')
+  ok('the captured answer reaches the next line', said.some((e) => /hello Olly/.test(e.text || '')))
+  delete game.copy.section('sequences')._ask
+}
+
+// ---------------------------------------------------------------------------
+section('choices say where they came from')
+{
+  const { game, S } = mk(121)
+  await skipOpening(game, S)
+  ok('a game choice is marked as one', game.choices(S).every((c) => c.kind === 'game'))
+  await game.handle(S, '1')
+  await game.handle(S, 'i')
+  ok('and so is every stake preset', game.choices(S).every((c) => c.kind === 'game' && c.token))
+
+  const { game: g2, S: T } = mk(122)
+  await g2.start(T)
+  ok('a scene marks its own', story.inSequence(T) && g2.choices(T).every((c) => c.kind === 'scene'))
+
+  const { game: g3, S: B } = mk(123)
+  await skipOpening(g3, B)
+  g3.copy.section('beats')._k = { text: 'x', choices: { a: { label: 'A' }, b: { label: 'B' } } }
+  B.beat = '_k'
+  const mixed = g3.choices(B)
+  ok('a beat marks its own, and they come first',
+     mixed.filter((c) => c.kind === 'beat').length === 2 && mixed[0].kind === 'beat' && mixed.at(-1).kind === 'game',
+     mixed.map((c) => `${c.kind}:${c.token}`).join(' '))
+  delete g3.copy.section('beats')._k
+
+  // read in error paths, so it must not be the thing that throws
+  const { game: g4, S: E } = mk(124)
+  await skipOpening(g4, E)
+  E.expect = 'exit'
+  E.world = null
+  let threw = null
+  try { g4.choices(E) } catch (e) { threw = e }
+  ok('asking for choices after a half-failed turn does not throw again',
+     threw === null, threw?.message)
+
+  // /help reads a scene back rather than performing it
+  const narrated = story.narrate(g4.copy, E, COPY.help_scene || 'voice')
+  ok('narrating is not paced', narrated.length > 0 && narrated.every((e) => e.pace === false))
+}
+
+// ---------------------------------------------------------------------------
 section('saving')
 {
   const dir = await mkdtemp(join(tmpdir(), 'mw4-'))

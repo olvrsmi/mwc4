@@ -44,6 +44,23 @@ function nodeEmit (copy, S, node, tpl) {
   return body === null ? [] : [{ kind: 'text', speaker, text: body, pace: true }]
 }
 
+/**
+ * Whatever the player typed, made safe to drop into a writer's line.
+ *
+ * A renderer converts a small markdown subset delimited by ` * _, and the
+ * answer to an `ask` is interpolated straight into sentences that use it. A
+ * player cannot inject anything - a renderer escapes before it converts - but
+ * a stray delimiter swallows the emphasis around it, so the author's line
+ * loses its formatting or keeps a loose underscore on screen. Stripped here,
+ * at the one place a player's own words enter the copy, rather than in every
+ * renderer that has to render them.
+ *
+ * Sliced by code point, so an answer made of emoji cannot be cut through the
+ * middle of a surrogate pair and left as a broken half in the saved game.
+ */
+export const capture = (raw) =>
+  [...String(raw ?? '').replace(/[`*_]/g, '')].slice(0, 60).join('').trim()
+
 /** Apply a node's or a choice's effects. Only two things a beat may touch. */
 export function applyEffects (S, spec) {
   if (!spec || typeof spec !== 'object') return
@@ -101,7 +118,12 @@ export function endSequence (S) {
 export function narrate (copy, S, id) {
   const nodes = copy.section(`sequences.${id}`)
   if (!Array.isArray(nodes)) return []
+  // Unpaced, deliberately. A scene is performed a beat at a time because
+  // someone is talking; this is the same words read back on request, and a
+  // player who asks how the game works should not wait out the dramatic
+  // timing to be told.
   return nodes.flatMap((node) => nodeEmit(copy, S, node || {}, node?.text))
+    .map((e) => ({ ...e, pace: false }))
 }
 
 /** The choices a scene is waiting on, or none. */
@@ -122,8 +144,7 @@ export function answerSequence (copy, S, raw) {
   const node = seqNodes(copy, S)[S.seq.at] || {}
 
   if (S.seq.awaiting === 'ask') {
-    // whatever they typed, verbatim - this is a name, not a command
-    S.vars[String(node.ask)] = String(raw ?? '').trim().slice(0, 60)
+    S.vars[String(node.ask)] = capture(raw)
     applyEffects(S, node)
     S.seq.at += 1
     S.seq.awaiting = null

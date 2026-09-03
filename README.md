@@ -34,8 +34,9 @@ budget on one of its holdings, and hold: your qubit couples to that holding
 every step you stay in, moves the price, and comes back changed.
 
 The rules are a pure state machine that knows nothing about how it is shown.
-This repository ships one renderer, the plainest possible HTML page. Anything
-that can send a token and show a list of messages can be another.
+This repository ships two renderers: the plainest possible HTML page, and a
+Telegram bot. Anything that can send a token and show a list of messages can be
+a third.
 
 ```
 mackenziewalk_04/
@@ -181,6 +182,43 @@ so free text keeps working.
 | `help` `state` | the rules read out again, and your standing; either works mid-position |
 | `skip` | end the opening scenes |
 
+## Clients
+
+The same game, two ways in. Both read the same `.env`, the same saved-game
+directory and the same physics backend, and neither knows the other exists.
+
+```
+npm start                  # the browser, on http://localhost:5090
+npm run telegram           # the Telegram bot
+```
+
+The bot needs a token from @BotFather in `TELEGRAM_BOT_TOKEN`. Telegram allows
+exactly one long poll per token and a second one evicts the first, so a laptop
+and a server cannot share a bot: make two, and set `MW_LOCAL=1` to use
+`TELEGRAM_BOT_TOKEN_LOCAL` instead. `MW_ALLOW` is an optional comma-separated
+list of Telegram user ids; set it and only those may play.
+
+In the chat, every choice arrives as an inline button and as a token you could
+have typed, so the whole game is playable either way. Slash commands are
+aliases for the same tokens:
+
+| | |
+|---|---|
+| `/start` | begin, or pick up an existing game where it stands |
+| `/restart` | throw that game away and begin again |
+| `/status` `/help` `/market` `/skip` | the same as typing `state`, `help`, `m`, `skip` |
+
+Two things the chat does that the page does not. Scene art goes as a **sticker**
+rather than a photo, because the art is cut out of its background and Telegram
+fits a photo to the message column, which stretches a portrait or paints a
+blurred copy behind it. And a tap on an **old keyboard is refused**: Telegram
+leaves every keyboard it has ever sent live, while the game reuses its tokens,
+so a stale `5` would otherwise stake 5G because it used to mean t5. Typing `5`
+still works, because typing it is deliberate.
+
+A chat session is keyed `tg<chat id>`, so it cannot collide with a browser one
+in the same store.
+
 ## Writing
 
 Every word a player reads lives in `core/copy.yaml`: messages, button labels,
@@ -218,9 +256,12 @@ Emissions are what a renderer shows, in order:
 | `art` | `art`, `text?`, `speaker?` | a named picture; `host/art/<name>.png` here |
 | `traces` | `title`, `caption`, `n`, `holdings`, `priced`, `clean`, `upto`, `totalReadouts`, `target`, `interventionAt`, `foot`, `z` | a chart; `host/render.mjs` draws it, or a renderer draws its own from the numbers |
 
-`choices` is the list of `{ token, label }` the player may send next. `summary`
-is the standing in numbers. Scene emissions also carry `pace: true`, for a
-host that wants to space a burst out.
+`choices` is the list of `{ token, label, kind }` the player may send next,
+where `kind` is `game`, `scene` or `beat` - a beat's choices arrive alongside
+the game's own and a renderer should set them apart, since a beat token
+shadows a game command of the same name. `summary` is the standing in
+numbers. Scene emissions also carry `pace: true`, for a client that wants to
+space a burst out; `help` reads a scene back unpaced.
 
 The model is anything with two methods:
 
