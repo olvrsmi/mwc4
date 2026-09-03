@@ -45,7 +45,15 @@ async function deliver (id, emissions) {
   const out = []
   for (const e of emissions) {
     if (RENDERABLE.has(e.kind)) {
-      const png = renderEmission(e)
+      let png = null
+      try {
+        png = renderEmission(e)
+      } catch (err) {
+        // A chart that will not draw costs the reading its picture, not the
+        // player their turn. The page falls back to the caption alone.
+        console.error(`  ${id}: could not draw a '${e.kind}': ${err.message}`)
+      }
+      if (!png) { out.push({ ...e, png: null }); continue }
       await mkdir(PNG_DIR, { recursive: true })
       const file = `${id}-${Date.now().toString(36)}-${(pngCounter++).toString(36)}.png`
       await writeFile(join(PNG_DIR, file), png)

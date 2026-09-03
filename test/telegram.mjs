@@ -433,6 +433,20 @@ section('when Telegram says no')
   ok('and the process is still standing', true)
   await blocked.cleanup()
 
+  // a chart that will not draw costs the picture, not the turn
+  {
+    const h = await harness()
+    await say(h.bot, 'hi'); await say(h.bot, 'skip')
+    h.sent.length = 0
+    // an emission the renderer cannot draw: no series to plot
+    const broken = { kind: 'traces', n: 2, holdings: ['AA', 'BB'], priced: null, z: null,
+                     upto: 0, totalReadouts: 10, caption: 'AA @ 120G · +1.0%', title: 't' }
+    await h.deliver(sessionId('42'), [broken], (await h.host.store.load(sessionId('42'))).session)
+    ok('an undrawable chart still delivers its reading',
+       texts(h.sent).some((t) => /120G/.test(t)) && !h.sent.some((s) => s.method === 'sendPhoto'))
+    await h.cleanup()
+  }
+
   // a delivery that fails must not lose an advanced turn
   const dir = await mkdtemp(join(tmpdir(), 'mw4-tg-lost-'))
   const warm = await harness({ seedDir: dir })

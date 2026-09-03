@@ -72,6 +72,10 @@ carries on from the next node. There is no branching to track. The key is the
 token the player sends and the label is what the button says; choices are
 keyed rather than listed so copy-check can see inside them.
 
+Keep a key short. It is what a chat client puts inside a button, and Telegram
+caps that at 64 bytes and refuses the message rather than truncating, so
+`copy-check` fails a longer one for you. `a`, `b`, `c` are the convention.
+
 ### Asking the player something
 
 ```yaml
@@ -83,8 +87,11 @@ keyed rather than listed so copy-check can see inside them.
         Alright, {name}. This way.
 ```
 
-Whatever they type is stored (trimmed, 60 characters) and readable as `{name}`
-in every later line of every scene.
+Whatever they type is stored and readable as `{name}` in every later line of
+every scene. It is trimmed, cut to 60 characters (by character, so an answer
+of emoji cannot come back broken), and has `` ` ``, `*` and `_` removed. Those
+three are the delimiters of the markdown below, and a player who typed one
+would otherwise swallow the emphasis in whatever line you put their answer in.
 
 ### Effects
 

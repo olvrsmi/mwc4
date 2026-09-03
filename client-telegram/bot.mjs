@@ -277,7 +277,18 @@ export function createBot ({
 
       if (RENDERABLE.has(e.kind)) {
         await action(chatId, 'upload_photo')
-        const png = renderEmission(e)
+        let png = null
+        try {
+          png = renderEmission(e)
+        } catch (err) {
+          // A chart that will not draw should cost the reading its picture, not
+          // the player their turn. The numbers are in the caption either way.
+          console.error(`  ${chatId}: could not draw a '${e.kind}': ${err.message}`)
+        }
+        if (!png) {
+          if (e.caption) await sendText(chatId, e.caption, reply_markup)
+          continue
+        }
         // A reading and the picture of it are one thing, so they travel as one
         // message. A caption over 1024 characters falls back to two.
         const cap = e.caption ? toHtml(e.caption) : null
