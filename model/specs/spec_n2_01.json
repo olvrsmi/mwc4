@@ -1,0 +1,7 @@
+{
+  "id": "spec_n2_01",
+  "n": 2,
+  "targets": [
+    { "expvals": {"YY": -0.07, "ZZ": -0.04, "ZY": 0.07}, "qubits": [0, 1], "fraction": 0.13 }
+  ]
+}

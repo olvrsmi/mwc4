@@ -1,0 +1,18 @@
+# secrets
+.env
+
+# saved games and rendered charts
+host/state/
+
+# node
+node_modules/
+npm-debug.log*
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# macOS
+.DS_Store

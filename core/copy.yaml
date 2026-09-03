@@ -1,0 +1,682 @@
+# =============================================================================
+# Office 4B, 6 Mackenzie Walk — every word the player reads.
+#
+# Edit this file freely. The bot reloads it on save; nothing needs restarting
+# and nobody's position is lost. If something here is wrong the message says so
+# rather than the round ending, and the console names the key.
+#
+# Values in {braces} are supplied by the engine, already formatted — {balance}
+# is "1,000G", {coherence} is "0.999". Each message below lists what it can use.
+#
+# When prose needs to bend there are escape hatches:
+#   {n} opportunit{n|s:y:ies}          singular or plural
+#   {#if recovering} (…){/if}          only when true
+#   {#if x}this{:else}that{/if}        one or the other
+#   {balance_raw|money}                re-format a raw number yourself
+#
+# Anywhere a list is given, one line is chosen at random.
+# Run `npm run copy-check` to confirm nothing is missing or misspelt.
+# =============================================================================
+
+scenes:
+
+  # {round} {coherence} {recovery} {recovering} {balance} {subscribed} {daily}
+  # {round} is still counted and still available here, it just is not the title
+  # any more: what this panel is is a list of what can be invested in.
+  round: |
+    **Investment Options**
+
+    Day {day} · {day_left} left
+    Your coherence: {coherence}{#if recovering} (recovery in {recovery}){/if}
+    Today's budget: {budget} · balance {balance} ({pl})
+    {#if has_bonus}Personal pot: {bonus}{/if}
+
+  # no values
+  offer: Three worlds are open to you.
+
+  # {world} {opportunities} {complexity} {monopoly} {volatility} {disconnected}
+  entered: |
+    **{world}**
+    {opportunities} investment {opportunities|s:opportunity:opportunities} · {complexity}
+    {monopoly}% corporate monopolisation
+    {volatility}% expected volatility{#if disconnected}
+    _Holdings here do not all connect._{/if}
+
+    {rows}
+
+  # one row per holding: {holding} {price} {contracted} {exposure} {exposed}
+  overview_row: "`{holding}`  {price} · {contracted}{#if exposed} · exposed to {exposure}{:else} · exposed to nothing{/if}"
+
+  # {world} {progress} {total} {coherence} {balance} {last_chance}
+  investment: |
+    **{world}** — {moment} (estimated length: {total})
+
+    Your coherence: {coherence}
+    Your balance: {balance}{#if last_chance}
+
+    _Last chance to act._{/if}
+
+  # {world} {holding} {value} {change} {arrow} {pl}
+  readout: "**{world}** · {holding} @ {value} · {change} {arrow} · P/L {pl}"
+
+  # {stake} {holding}
+  staking: "{stake} on **{holding}**. Making investment."
+
+  # {holding} {exit} {every}
+  position_open: "_Position open on **{holding}** until {exit}. Reports every {every}._"
+
+  # {target} {opened_at} {closed_at} {change} {multiplier} {stake} {returned}
+  # {profit} {balance} {outcome} {coherence} {was_coherence} {flat} {drained}
+  returns: |
+    **Returns**
+    {holding}: open @ {opened_at}, close @ {closed_at}
+    Change {change} · multiplier {multiplier}
+
+    Investment {stake} · return {returned} · **{outcome} {profit}**
+
+    Balance {balance}{#if flat} {/if}
+
+    Your coherence: {coherence} (was {was_coherence}){#if forced}
+    _Closed early: EOD._{/if}{#if drained} {/if}
+
+  # {world} {target} {exit}
+  take_profit: |
+    Coupling to **{holding}**. Where do you take profit?
+
+    You are at {moment}. Choose any point from {first} to {last} — the position closes there and the round ends.
+
+  # {balance}
+  ask_stake: "How much do you stake? (1 – {balance})"
+  # {last}
+  ask_target: "Couple to which holding? (0 – {last})"
+  # {first} {last}
+  ask_exit: "Pick a point from {first} to {last}."
+  ask_units: How many upgrades?
+
+  left: You leave before anything is committed.
+  observed_all: You observed the whole circuit and staked nothing. Your qubit is untouched.
+  broke: "**You are out of money. The walk ends here.**"
+  nothing_to_stake: You have nothing left to stake.
+  turn_failed: Something went wrong at this end and your last move was lost. Send anything to pick up where you were.
+
+  # {recharge} {unit_cost} {coherence} {balance} {budget} {bonus} {units}
+  # {upgrades} {recovering} {recovery}
+  marketplace: |
+    **The workshop**
+    A spent investment-bit cleans up on its own in {recharge}. Each upgrade buys a quarter again, once, for {unit_cost} out of today's budget.
+
+    Coherence {coherence} · today's balance {balance}
+    Upgrades owned {upgrades}{#if recovering}
+    Clean again in {recovery}{/if}
+
+  # {bought} {spent} {upgrades} {recovery}
+  upgraded: "{bought} bought for {spent}. {upgrades} owned — clean-up now takes {recovery}."
+  # {cost} {balance}
+  cannot_afford: "An upgrade is {cost} and you have {balance}."
+
+  # {day} {pl} {good} {traded} {idle} {was_budget} {budget} {change} {floored} {floor}
+  day_end: |
+    **The bell — day {day} closes**
+
+    {#if idle}You made no investments today.{:else}Day's result: {pl}{/if}
+    Budget {was_budget} → **{budget}** ({change})
+    {#if floored}_Your budget cannot fall below {floor}._{/if}
+
+  # {total} {paid} {bonus} {pot}
+  week_end: |
+    **The week closes.** Seven days came to {total}.
+    {#if paid}A personal bonus of {bonus} has been paid. Your pot stands at {pot}. It cannot be invested.{:else}No bonus this week.{/if}
+
+  # {total} {attempt} {again} {coherence} — the probation week ended in profit
+  # {exit} {remaining} {reachable}
+  exit_past_bell: |
+    **{exit} falls after the bell.**
+
+    The day ends in {remaining} and every position closes where it stands, so you would be sold out early — {reachable} is the last point you can reach in full.
+
+    Hold anyway, or choose again?
+
+  # {worlds} {skipped} {recharge}
+  welcome: |
+    **OFFICE 4B, 6 MACKENZIE WALK**
+
+    Welcome to Mackenzie Walk Capital, London's premier neo-market-day-trading firm.
+
+    As a quick refresher, neo-markets are ultra-small markets opened up for investment as one of the early benefits of 2028's discovery of AGI. Initially focused on ecosystems and microclimates, with an as-yet unrealised hope that this could allow hedging against climate collapse, the increasing rate of cyborg-centaur-competition has lead to ever smaller markets being discovered. It’s estimated that market count doubles every 3 days, and this rate of doubling has itself doubled in the last month.
+
+    The current state-of-the art is quantum markets, impossibly small in scale. Here at Mackenzie Walk Capital, we pride ourselves on being the first to enter neo-markets, but you know that from the orientation. Despite what happened with the microclimate markets, we're confident that these are small enough that there shouldn't be any negative externalities, it's just a few electrons or whatever.
+
+    So, boot up your FOOMBERG™ terminal, this is where you find markets. As you're a newbie, it'll give you three to choose from and one possible investment-bit. 
+    
+    This means you can choose one entity in one market to invest in. Pick wisely. Spend some time observing the trajectories before making your decision, but don't wait too long. If the value of the entity is up when you exit, you make money, if it's down you lose it. Simple as that.
+    
+    When you invest, your investment-bit is coupled with the entity you choose and you have to wait for your exit point before you can make further calls.
+
+    Remember your investment bit will come back changed and you may need to wait for it to clean up ({recharge}).
+
+  # {elapsed} {gained}
+  time_passed: "{elapsed} passed: {gained}"
+
+# One of these is chosen at random when a player writes during their own run.
+chatter:
+  - The circuit is mid-run. Nothing to decide until it settles.
+  - Noted. The gates do not care.
+  - Still running. You can only watch from here.
+  - The stake is placed. It plays out either way.
+
+prompts:
+  # {options}
+  unknown: "Type {options}."
+  help: |
+    **Commands**
+    `1` `2` `3` — enter a world · `m` — marketplace
+    `i` — invest · `o` — observe on · `l` — leave
+    `b` / `s` — buy or sell regeneration · `l` — leave the marketplace
+    When asked for a number, just type it.
+  say_something: Say something, or type **help**.
+  # shown when a player types something a running scene has no answer for
+  scene_waiting: _Someone is still talking. Answer them, or **skip**._
+  nothing_to_decide: Nothing to decide just now.
+
+buttons:
+  invest: Invest
+  observe: Observe
+  leave: Leave
+  marketplace: Marketplace
+  status: Status
+  # new in 04: a position is stepped by hand and may be closed before its exit point
+  hold: Hold
+  close: Close position
+  buy: Buy
+  hold_anyway: Hold anyway
+  choose_again: Choose again
+  all_stake: "All {amount}"
+  stake: "{amount}"
+  # {index} {world} {opportunities}
+  world: "{index}. {world} — {opportunities} opportunit{opportunities|s:y:ies}"
+  # {readout}
+  exit_point: "{moment}"
+  exit_end: "{moment} (the end)"
+  qubit: "{holding}"
+  # {world} {until}
+  locked_toast: "Your money is committed to {world} until {until}."
+
+# The five bands a world's complexity is described by, easiest first.
+# Thresholds live in code; add or rename words here and the bands re-space.
+vocabulary:
+  # How one holding inside a world is named, and how a moment in its progress
+  # is named. {index} counts from zero. Everything that shows either - messages,
+  # buttons, and the labels drawn onto the plots - uses these.
+  holding: "E{index}"
+  moment: "t{index}"
+
+  # How heavily a holding is contracted - its share of what the specification
+  # asks of the world. Least to most; add or remove a word and the bands
+  # re-space themselves.
+  contracted:
+    - unencumbered
+    - lightly contracted
+    - contracted
+    - heavily contracted
+    - bound hand and foot
+
+  complexity:
+    - simple
+    - moderate
+    - involved
+    - dense
+    - labyrinthine
+
+# Plot captions. These are drawn onto an image in a font with no box-drawing
+# glyphs or angle brackets, so keep them to plain ASCII.
+plots:
+  # {world} {gates} {layers}
+  # from ^ - {gates} gates over {layers} layers
+  # {world} {progress}
+  traces_title: "{world} - {moment}"
+  # {world} {target} {change}
+  traces_running: "{world} - {holding} running {change}"
+  traces_legend: "quote in G, log scale"
+
+# The places a player may be offered. Add, cut and rename freely.
+# Tickers for the holdings inside a world. Each world draws as many as it
+# has qubits, and no two worlds in one offer share a ticker. Runs out
+# gracefully: a world with more qubits than there are names left falls
+# back to vocabulary.holding.
+holdings:
+  - PBP
+  - WTW
+  - NPG
+  - CRV
+  - TCE
+  - IIS
+  - TWM
+  - LLD
+  - VBD
+  - PTB
+  - SSR
+  - TST
+  - FCB
+  - WTN
+  - SSC
+  - CPM
+  - RPF
+  - STL
+  - RFS
+  - EPO
+  - CMR
+  - DTE
+  - CHS
+  - PLJ
+  - OOT
+  - FCE
+  - BND
+  - DCL
+  - BCL
+  - ECV
+  - ASR
+  - LRI
+  - STH
+  - JJS
+  - CCF
+  - TGD
+  - WSE
+  - BBC
+  - SSP
+  - WGG
+  - SBN
+  - ELS
+
+worlds:
+  - Powder Pram
+  - Rice Vision
+  - Tables Expert
+  - Tidy Memo
+  - Less Locker
+  - Bats Dawn
+  - Skinny Reds
+  - Sadly Trial
+  - Cooks Vrush
+  - Shut Cube
+  - Candle Master
+  - Pile Fixed
+  - Radio Farms
+  - Engine Ocean
+  - Curiosity Metro
+  - Tiger Eaten
+  - Closed Shots
+  - Closed Hits
+  - Lonely Jumps
+  - Open Online
+  - Fine Class
+  - Normal Dark
+  - Caller Lions
+  - Chin Lend
+  - Every Couches
+  - Liked Rounds
+  - Third Hooks
+  - Think Goes
+  - Spare Enjoyable
+  - Bland Chase
+  - Salsa Shade
+  - Wanted Gravy
+  - Social Note
+  - Audio Grace
+  - Limbs Send
+
+# ---------------------------------------------------------------------------
+# Beats — the scripted moments of the probation week.
+#
+# A SETPIECE is keyed to a day and fires once, ever, when that day of probation
+# begins. `schedule` says which beat belongs to which day; a day with no entry
+# passes without one.
+#
+# Choices colour the reply and nothing else: the player picks, the beat answers,
+# and the game is where it was. They may carry a small effect - `coherence` as a
+# delta, `unlock` as a marketplace item id - and those apply when the choice is
+# taken. Put an effect on the beat itself to have it apply however they answer.
+#
+# Choices are keyed rather than listed (a, b, c...) because the key is the token
+# the player replies with, and because copy-check can only see inside objects -
+# a list of choices would ship unvalidated.
+#
+# A beat can arrive mid-round. It does not interrupt a position: the readouts
+# keep coming and the choice can be answered whenever.
+#
+# `again` is for a desk having another go. Probation setpieces fire once ever,
+# so a second attempt would otherwise be silent - these are the sound of a
+# floor that carries on. One is picked at random.
+# ---------------------------------------------------------------------------
+beats:
+  schedule:
+    2: change1
+    3: the_himbo
+    4: change2
+
+  # {day} {budget} {attempt}
+  change1: |
+    _[your mouse feels different today, not massively but the texture's changed. Is it a bit heavier too?]_
+
+  change2:
+    text: |
+      **Navinder stops at your desk.**
+
+      You're a wizz on that machine, huh. How's it going newbie?"
+    choices:
+      a:
+        label: Who switched your mouse
+        reply: |
+          "Hahaha. Why would someone do that? I told you to make sure you invested at a distance, didn't I?"
+        coherence: 0.04
+      b:
+        label: Offer similar platitudes
+        reply: |
+          Head's still in the game, huh? No bother, but do watch out for things starting to feel different.
+  the_himbo:
+    text: |
+      **Daniel has a theory.**
+
+      "So right — the CHEAP ones. Nobody's watching the cheap ones." He is
+      delighted. He has been here four months.
+    choices:
+      a:
+        label: Humour him
+        reply: |
+          "See, you get it." He tells three other people you agreed with him.
+      b:
+        label: Point at the quota
+        reply: |
+          "Oh, the quota." His face does something complicated. "Yeah. No, the
+          quota's the thing, isn't it."
+
+  # A desk on its second attempt or later. Randomised, and deliberately small.
+  again:
+    - _Nobody looks up when you sit down._
+    - _The terminal remembers your layout. Somebody's does, anyway._
+    - _Someone has left a coffee on desk B. It is not yours and it is not warm._
+
+# ---------------------------------------------------------------------------
+# Sequences — scripted scenes, played a node at a time.
+#
+# Everything up to the next thing the scene wants from the player is sent in one
+# burst, a beat apart. See BEATS.md for the whole schema; in short, a node may
+# carry `art`, `speaker`, `text`, `choices` (keyed a, b, c... — any number), and
+# `ask` (capture what they type next into a named variable).
+#
+# Choices colour the moment and rejoin: each one's `reply` plays, then the
+# sequence carries on from the next node. There is no branching to track.
+#
+# `art` names a file in server/art/. A name with no file is skipped silently, so
+# a scene can be written before it is drawn.
+# ---------------------------------------------------------------------------
+# The scenes of a first sitting, in order. Each plays once; when one ends the
+# next begins, and when the last is done the game starts. Add a scene here and
+# it joins the opening - the engine does no chaining of its own.
+# The scene `help` reads out again, at any moment. It must not stop to ask
+# anything - see the note above that scene. Defaults to `voice` when absent.
+help_scene: tutorial
+
+opening:
+  - intro
+  - office
+  - tutorial
+  - orientation
+
+sequences:
+  intro:
+    - art: himbo
+      speaker: Daniel
+      text: |
+        There you are, you made it past security. I should tell them to sharpen
+        up haha
+
+        _Holds out lanyard_
+      choices:
+        a:
+          label: Take it, quickly
+          speaker: Daniel
+          reply: |
+            Man, my first day was so exciting, welcome to MWC. Welcome to the future!
+            
+            Follow me.
+        b:
+          label: Take it, calmly    
+          speaker: Daniel
+          reply: |
+            Thats you, welcome to MWC. Welcome to the future!
+            
+            Follow me.
+
+    - text: |
+        _[You follow Daniel to the lift, remembering him exuding the same kind of hopeful energy throughout your entire 15 round, 12 minute interview process.]_
+
+    - speaker: Daniel
+      text: |
+        We're floors 11 and up, used to have quants in the basement, closer to the cables, but apparently latency’s not really an issue with neo-markets.
+
+        You'll be on 17, office 178, desk B. look for Navinder, they've set him up doing intros. Don't take it personal, that's just how he is.
+
+      choices:
+        a:
+          label: Call the lift
+          speaker: Daniel
+          reply: |
+            You go get 'em, haha!
+        b:
+          label: Do nothing
+          speaker: Daniel
+          reply: |
+            _Presses lift button_
+
+            Yea we still have the old style
+
+    -  text: |
+        ...
+    
+    - text: | 
+        _ding_ 
+    
+    - text: |
+        Catch you on a drinkfood break maybe, have a good one.
+
+    - text: |
+        _The lift creaks into place and the doors open, 12 industrial revolutions down and we still haven't got the one that solves for general maintenance. You step in._
+
+      choices:
+        a:
+          label: "[17]"
+          reply: |
+            _Well remembered, you feel like you're being tested somehow, even now. Doors close and the lift starts to move..._
+        b:
+          label: "[-1]"
+          reply: |
+            _Oops, you catch yourself in time and press 17. The lift closes and carries you up..._
+        c:
+          label: "[??]"
+          reply: |
+            _No response. Thankfully. You hit 17 and the lift starts to move..._
+
+  
+  # Specified later. An empty sequence simply does not play, so this can sit
+  # here unfinished without affecting anything.
+  office: 
+    - text: _You step out at floor 17 and fail to orient yourself, only when you pass the lift for the 4th or 5th time do you spot the door to office 178._
+
+    - text: _You push open the door and see Navinder stood staring out the window, he's the only other person in there_
+      choices:
+        a:
+          label: "Say 'hi'"        
+          speaker: Navinder
+          reply: |
+            ...
+        b:
+          label: "Look for desk B"
+          speaker: Navinder
+          reply: |
+            ...
+
+    - text: _You sit down at desk B and boot the terminal. You scan your pass when prompted, input the second and third factor authentications from your phone and watch, and put your first three fingers in the scanner_
+
+    - art: oldhead
+      speaker: Navinder
+      text: |
+        Hey newbie. Start off with the founder welcome or I’ll be in trouble.
+
+        _Your desktop spreads across the 6 screens in front of you, there's only two icons_
+      choices:
+        a:
+          label: "hiya.mp4"
+          speaker: Navinder
+          reply: |
+            Keep your eyeballs forward, they track that shit.
+        b:
+          label: "Metrics_FINAL.mov"
+          speaker: Navinder
+          reply: |
+            Ah not that one! Come on now.
+
+            _Clicks 'hiya.mp4' for you, gestures at the webcam_
+
+            Try and appear focussed, at least, for the cameras.
+
+    - art: founders
+      speaker: Lara
+      text: |
+        Hi!
+
+    - speaker: Martin
+      text: Hey! Welcome to the team
+      choices:
+        a:
+          label: "wave"
+          speaker: Navinder
+          reply: |
+            ... it's prerecorded
+        b:
+          label: "do nothing"
+          speaker: Navinder
+          reply: |
+           That's right, keep the focus
+
+    - speaker: Lara + Martin
+      text: |
+        When we started Mackenzie Walk Capital we had nothing but a dream, a huge roster of investors enamoured with youth from our time at Jane Street and Goldman Sachs, and a willingness to Do What It Takes.
+        
+        We look forward to meeting you after your first week, in our scheduled, new starter 37 second catch up. Remember, Do What It Takes!
+
+    - art: oldhead
+      speaker: Navinder
+      text: |
+        Right, right. Let me show you round the FOOMBERG terminal.
+
+  # The voice, on its own, because /help plays it again. Splitting it out is
+  # what stops the words existing twice: a second copy for /help would drift
+  # from this one the first time either was edited. It runs in its place in
+  # the opening because `opening` chains whatever it lists.
+  #
+  # Keep it free of choices and asks. /help can arrive mid-position, and a
+  # scene that stops to ask something would leave the player holding a
+  # question instead of a holding - copy-check refuses one.
+  tutorial:
+    - speaker: Disembodied Voice
+      text: |
+        _A disembodied voice starts talking, Navinder doesn't stop explaining (maybe he can't hear it) but you can't hear him any more. It's weirdly present, and feels like some placeholder text in an unfinished world to you..._
+
+        **The Markets**
+        Welcome to Mackenzie Walk Capital, a post AGI investment company focussed on Neo-markets. You'll need to make a significant profit in your first week to pass probation and impress the founders.
+        
+        Since AGI took off in late 2028 Neo-markets have become a significant focus of investment and it’s estimated that the number of these increasingly small markets (investing in the changes of atomic or subatomic systems) doubles every 3 days, and this rate of doubling has itself doubled in the last month. There are rumours, posts, unsubstantiated pieces of independent research, and even a few early Arxiv.org preprints that suggest that observing, modelling and investing in these systems is changing them, scare words like decoherence, collapse are beginning to float around the discourse.
+
+    - speaker: Disembodied Voice
+      text: |
+        **The Terminal**
+
+        On your desk is a FOOMBERG™ terminal, a self-improving, AGI-inside investment terminal specialising in neo-markets. MWC's unique approach is to pair the power of the terminal with the sense making capabilities of its user, following the go-getting early industrial model of canaries and coalminers.
+
+        The terminal will present you with three possible neo markets at any one time. These each have differing numbers of investment opportunities.
+
+        On entering the market the terminal gives you a readout of its structure followed by a graph of the current standing of all entities.
+
+        You can invest straight away, observe the market's progress, or leave and choose another from the three. You must invest, MWC doesn't appreciate timidity.
+
+     
+
+    - speaker: Disembodied Voice
+      text: |
+        **Investment**
+
+        When you invest you stake some of your day's funds on one of the entities, but you also couple your terminal with the entity. This is the only way to exploit neo-markets (and it's totally fine btw, no negative externalities).
+
+        This coupling can change the outcome of the market, and skilled traders can sense when and how to invest even if the entity doesn't look clasically profitable.
+
+        The coupling also changes the state of your terminal, causing it to lose coherence and necessitating some recovery time, particularly from bad trades. The company has an internal marketplace you can purchase upgrades to the recovery process from.
+
+    - speaker: Disembodied Voice
+      text: |
+        **Probation**
+
+        This first week is your probation week. You need to prove your worth before you get to keep a cut of the profits as your salary. 
+        
+        - Probation week is a 7 day working week 
+        - you receive a €${budget} baseline daily budget 
+        - if you end the day with a more than 10% profit your budget is increased by 10% the next day
+        - if not, it's reduced by 5%
+        - you must make a profit of €${budget * 7 / 2} to pass Probation
+        - if you fail you can keep trying, but normally only the nepo-hires have funds for that
+
+  # --- the verdicts ---------------------------------------------------------
+  #
+  # The end of a probation week, as a scene rather than a line: characters can
+  # come over, say something, and be answered. They read the week's numbers -
+  # {total} {attempt} {failures} {again} {budget} {coherence} - and a choice may
+  # carry `coherence:` or `unlock:` exactly as a beat's does.
+  #
+  # Passing happens once, so it has one scene. Failing repeats, so the full
+  # scene plays on the first failure and `probation_failed_again` after that.
+  # Leave that one empty and the full scene plays again instead.
+  probation_passed:
+    - text: |
+        **Seven days. {total}.**
+
+        You are off probation. The desk is yours.
+
+  probation_failed:
+    - text: |
+        **Seven days. {total}.**
+
+        Not a profitable week, so not yet a desk. You start again on {budget}{#if again} — attempt {attempt}{/if}.
+
+        Your qubit is where you left it, at {coherence}. That much is yours.
+
+  # Shorter, for the second failure onward. Empty until it is written.
+  probation_failed_again: []
+
+  # Navinder again, once the voice has finished. Its own scene only because
+  # the voice between them is one - see the note above `voice`.
+  orientation:
+    - art: oldhead
+      speaker: Navinder
+      text: |
+        Got that?
+      choices:
+        a:
+          label: yes, thanks!
+          reply: |
+            _you think so, anyway... you spotted a `/help` option you can use later at least_
+        b:
+          label: ask for a repeat
+          reply: |
+            _You start to ask him to repeat but remember you spotted a `/help` option, you can just use that_
+
+    - speaker: Navinder
+      text: |
+        Alright, make good trades and try not to fundamentally alter the fabric of reality.
+      choices:
+        a:
+          label: seems normal
+          reply: |
+            _You smile and nod as your head turns back to the terminal. Time to make some money._
+        b:
+          label: ignore the implications
+          reply: |
+            _You smile and nod as your head turns back to the terminal. Time to make some money._

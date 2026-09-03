@@ -1,0 +1,24 @@
+{
+  "name": "mackenziewalk",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "description": "Office 4B, 6 Mackenzie Walk - a turn-based quantum trading game, renderer agnostic",
+  "scripts": {
+    "start": "node host/server.mjs",
+    "dev": "node --watch host/server.mjs",
+    "fake": "MW_MODEL=fake node host/server.mjs",
+    "test": "node test/selftest.mjs",
+    "copy-check": "node test/copy-check.mjs",
+    "dryrun": "node test/dryrun.mjs",
+    "model-test": "cd model && ${MW_PYTHON:-.venv/bin/python3} selftest.py",
+    "warm": "cd model && ${MW_PYTHON:-.venv/bin/python3} warmcache.py"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.60",
+    "yaml": "^2.9.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
