@@ -1,0 +1,66 @@
+# deploy.yml - push to main, and the box catches up.
+#
+# Two jobs. The first is the same `npm test` you run by hand: no Python, no
+# network, no secrets, and it runs on pull requests too. The second only ever
+# runs on main, only after the first has passed, and does one thing - opens an
+# ssh connection to the box.
+#
+# It does not send a command. The deploy key on the box is pinned to a forced
+# command (see deploy/mw-deploy and the runbook), so this connection can run
+# that script and nothing else. A leaked secret is a stranger who can redeploy
+# main; it is not a shell.
+
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# One deploy at a time, and never cancel one half-way: the box would be left
+# between a git reset and a service restart.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run copy-check
+
+  deploy:
+    needs: test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: deploy
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          for v in DEPLOY_KEY DEPLOY_HOST DEPLOY_KNOWN_HOSTS; do
+            eval "test -n \"\$$v\"" || { echo "$v is not set - see deploy/README.md"; exit 1; }
+          done
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          # The host key is pinned rather than trusted on sight: accepting
+          # whatever answers would hand the key to anyone who can get in
+          # between this runner and the box.
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy \
+              -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes \
+              -o ConnectTimeout=15 \
+              root@"$DEPLOY_HOST" true

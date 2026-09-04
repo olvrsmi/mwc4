@@ -1,0 +1,48 @@
+#!/bin/sh
+# mw-deploy - everything a push to main does on this box.
+#
+# Installed at /usr/local/bin/mw-deploy and pinned as the forced command on the
+# CI deploy key, so that key can run this and nothing else. It takes no
+# arguments and reads nothing from the connection, deliberately: whatever the
+# other end asks for, this is what happens.
+#
+#   cp deploy/mw-deploy /usr/local/bin/mw-deploy && chmod 755 /usr/local/bin/mw-deploy
+#
+# Safe to run by hand as root when you want to deploy without pushing.
+
+set -eu
+
+APP=/opt/mackenziewalk
+PORT=${PORT:-5090}
+UNIT=mackenziewalk
+
+echo "--- deploy $(date -Is)"
+cd "$APP"
+
+# reset, not pull: the box mirrors main and must never be blocked by something
+# edited here in place - which is exactly how the Caddyfile got stuck once.
+# Only tracked files are touched, so state/ and .env are not at risk: they are
+# ignored, and reset --hard does not reach ignored files.
+sudo -u mw git fetch --prune origin
+sudo -u mw git reset --hard origin/main
+echo "--- at $(sudo -u mw git rev-parse --short HEAD): $(sudo -u mw git log -1 --pretty=%s)"
+
+sudo -u mw npm ci --omit=dev --prefix "$APP"
+
+systemctl restart "$UNIT"
+
+# Fail loudly if it does not come back. Without this the workflow goes green on
+# a deploy that left the site down, which is worse than no workflow at all.
+i=0
+while [ "$i" -lt 30 ]; do
+  if curl -fsS -m 2 "http://127.0.0.1:${PORT}/api/health" >/dev/null 2>&1; then
+    echo "--- up: $(curl -fsS -m 2 "http://127.0.0.1:${PORT}/api/health")"
+    exit 0
+  fi
+  i=$((i + 1))
+  sleep 1
+done
+
+echo "--- did not answer within 30s" >&2
+systemctl status "$UNIT" --no-pager -n 20 >&2 || true
+exit 1

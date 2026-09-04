@@ -155,6 +155,77 @@ The process drains the turns in flight on SIGTERM, so a restart does not cost
 anyone the step they were paying for. Saved games are written atomically in any
 case, so even a hard kill loses at most a message someone was reading.
 
+## Deploying from a push
+
+`.github/workflows/deploy.yml` runs `npm test` on every push and pull request,
+and on a green build of `main` opens one ssh connection to the box. It sends no
+command: the deploy key is pinned to a forced command, so that connection runs
+`/usr/local/bin/mw-deploy` and nothing else. A leaked secret is a stranger who
+can redeploy main — it is not a shell on your server.
+
+Four steps, three of them yours alone. **The private key must never be pasted
+anywhere but GitHub's own secrets page**, so generate it yourself rather than
+having anything else do it for you.
+
+**1. Make a key for CI, on your laptop.** Its own key, not one you use:
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/mwc-deploy -C "github actions mwc4" -N ""
+```
+
+**2. Pin it on the box**, as root. This adds a *second* key — your own key in
+`authorized_keys` is untouched and keeps its normal shell:
+
+```bash
+cp /opt/mackenziewalk/deploy/mw-deploy /usr/local/bin/ && chmod 755 /usr/local/bin/mw-deploy
+```
+
+Then append one line to `/root/.ssh/authorized_keys`, with the contents of
+`~/.ssh/mwc-deploy.pub` where the key goes:
+
+```
+command="/usr/local/bin/mw-deploy",no-agent-forwarding,no-port-forwarding,no-pty,no-user-rc,no-X11-forwarding ssh-ed25519 AAAA... github actions mwc4
+```
+
+**3. Pin the box's host key**, so the runner cannot be talked into handing the
+key to something else. On your laptop:
+
+```bash
+ssh-keyscan -t ed25519 mwc.oliversmith.cc
+```
+
+Check the fingerprint of what comes back against the box's own, which you can
+read while you are still logged in — `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`.
+
+**4. Add three secrets** in the repository, under Settings → Secrets and
+variables → Actions. Only you can do this:
+
+| Secret | What goes in it |
+|---|---|
+| `DEPLOY_KEY` | the whole of `~/.ssh/mwc-deploy` — the private half, including the BEGIN and END lines |
+| `DEPLOY_HOST` | `mwc.oliversmith.cc`, or the box's IP |
+| `DEPLOY_KNOWN_HOSTS` | the line `ssh-keyscan` printed |
+
+Then check it before trusting it. From your laptop, this should print a deploy,
+not give you a prompt:
+
+```bash
+ssh -i ~/.ssh/mwc-deploy root@mwc.oliversmith.cc whoami
+```
+
+It ignores `whoami` and deploys. That is the forced command working, and it is
+the thing worth confirming by hand: if it gives you a shell, the
+`command="..."` prefix did not take, and the key is far more powerful than it
+should be.
+
+`mw-deploy` does `git reset --hard origin/main` rather than a pull, so the box
+mirrors main and cannot be blocked by anything edited in place — which is how
+the Caddyfile got stuck the first time. Only tracked files are touched: `.env`,
+`state/` and `/etc/caddy/Caddyfile` are ignored or outside the clone, and stay
+as they are. It then restarts the service and waits for `/api/health` to answer,
+failing the workflow if it does not — so a red build means the site is down,
+and a green one means it is up.
+
 ## Checking it from outside
 
 ```bash
