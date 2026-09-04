@@ -38,7 +38,16 @@ Then, still in BotFather, `/setdomain` on the new bot, set to the domain above.
 
 ## Setting up, once
 
-As root:
+As root. First the domain, once, in this shell — everything below uses it, so
+set it to yours before you paste anything:
+
+```bash
+DOMAIN=mwc.example.com; case $DOMAIN in *example.com) echo "^^ not yours - change it";; esac
+```
+
+Left as it is, that domain fails at Let's Encrypt and the site answers every
+browser with `ERR_SSL_PROTOCOL_ERROR` — which is why it says so out loud rather
+than waiting to be found. If you reconnect part-way through, set it again. Then:
 
 ```bash
 # node 20, to match .nvmrc
@@ -68,9 +77,14 @@ PORT=5090
 TELEGRAM_BOT_TOKEN=...          # the new production bot
 MW_BOT_USERNAME=...             # without the @, for the login widget
 MW_SECRET=...                   # openssl rand -hex 32
-MW_PUBLIC_URL=https://game.example.com
+MW_PUBLIC_URL=https://...       # the same $DOMAIN, and the same one BotFather has
 MW_TRUST_PROXY=1                # Caddy sets X-Forwarded-For; nothing else can reach it
 ```
+
+Three places have to name the same domain and none of them will tell you if
+they disagree: the Caddy site block, `MW_PUBLIC_URL`, and BotFather's
+`/setdomain`. Caddy fails visibly. The other two fail silently — a cookie that
+is not marked Secure, and a login widget that renders and signs nobody in.
 
 ```bash
 chown mw:mw /opt/mackenziewalk/.env && chmod 600 /opt/mackenziewalk/.env
@@ -90,9 +104,30 @@ Then start it:
 cp /opt/mackenziewalk/deploy/mackenziewalk.service /etc/systemd/system/
 cp /opt/mackenziewalk/deploy/mackenziewalk-backup.service /etc/systemd/system/
 cp /opt/mackenziewalk/deploy/mackenziewalk-backup.timer /etc/systemd/system/
-sed -i 's/game.example.com/YOUR.DOMAIN/' /opt/mackenziewalk/deploy/Caddyfile
-cp /opt/mackenziewalk/deploy/Caddyfile /etc/caddy/Caddyfile
 
+# Everything in deploy/ is a template, read and never written: editing one in
+# place leaves the clone dirty and the next git pull awkward. The domain goes
+# in on the way past.
+sed "s/game\.example\.com/$DOMAIN/" /opt/mackenziewalk/deploy/Caddyfile > /etc/caddy/Caddyfile
+```
+
+Look at what that produced before starting anything. This one line is the
+difference between a working site and a browser saying the connection is not
+secure, and nothing downstream will tell you it is wrong:
+
+```bash
+awk '!/^[[:space:]]*#/ && NF {print; exit}' /etc/caddy/Caddyfile
+```
+
+That prints the site address line — the first thing in the file that is not a
+comment. It must be your domain. Then check the whole file parses, so a typo
+cannot take Caddy down on reload:
+
+```bash
+caddy validate --config /etc/caddy/Caddyfile
+```
+
+```bash
 systemctl daemon-reload
 systemctl enable --now mackenziewalk mackenziewalk-backup.timer
 systemctl reload caddy
@@ -123,13 +158,42 @@ case, so even a hard kill loses at most a message someone was reading.
 ## Checking it from outside
 
 ```bash
-curl https://YOUR.DOMAIN/api/health          # {"ok":true,"model":"...","bot":"polling"}
-curl --max-time 5 http://YOUR.IP:5090/       # must NOT answer: the app is on loopback
+curl https://$DOMAIN/api/health              # {"ok":true,"model":"...","bot":"polling"}
+curl --max-time 5 http://<the box's IP>:5090/   # must NOT answer: the app is on loopback
 ```
 
 `bot` in that health line is the one thing that can be wrong without the process
 dying: a rejected token or another poller holding it leaves the website serving
 normally and says so there.
+
+## When TLS does not come up
+
+`ERR_SSL_PROTOCOL_ERROR` in a browser means Caddy is listening but has no
+certificate for the name that was asked for — nearly always because the site
+block names a different domain. It is worth knowing that this is **not** what a
+missing or untrusted certificate looks like: that is a warning page you can
+click through. A protocol error means nothing valid was spoken on 443 at all.
+
+```bash
+awk '!/^[[:space:]]*#/ && NF {print; exit}' /etc/caddy/Caddyfile
+```
+
+```bash
+ss -lntp | grep -E ':(80|443|5090)'      # who is actually listening
+```
+
+```bash
+journalctl -u caddy -n 80 --no-pager     # Caddy says exactly why ACME failed
+```
+
+- `caddy` on 80 and 443 with `node` on 127.0.0.1:5090 is the layout you want.
+- `node` on 443 means the app was exposed directly and Caddy is not in the path.
+- Nothing on 443 gives connection-refused rather than a protocol error, so if
+  you are seeing this at all, Caddy is running.
+
+Port 80 has to stay open. The certificate is issued over it and renewed over it
+every couple of months, so closing it once the site is up works until it
+silently doesn't.
 
 ## Getting a game back
 

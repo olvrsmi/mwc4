@@ -1,11 +1,20 @@
 # Caddyfile - the whole of the TLS story.
 #
-#   cp deploy/Caddyfile /etc/caddy/Caddyfile   (then put the real domain in)
+# A template. It is read and never edited: the domain goes in on the way to
+# /etc/caddy, so this file stays as git has it and a deploy stays a git pull.
+#
+#   sed "s/game\.example\.com/$DOMAIN/" deploy/Caddyfile > /etc/caddy/Caddyfile
+#   awk '!/^[[:space:]]*#/ && NF {print; exit}' /etc/caddy/Caddyfile
+#     ^ prints the site address: confirm it is your domain, not the one below
 #   systemctl reload caddy
 #
-# Caddy gets and renews the certificate on its own. The domain here must be the
-# same one BotFather was given with /setdomain, or the Telegram Login Widget
-# will render and then quietly refuse to sign anyone in.
+# Caddy gets and renews the certificate on its own; there is no certbot step.
+# But it only has a certificate for the name written below, so leaving a
+# placeholder here gives every browser ERR_SSL_PROTOCOL_ERROR - Caddy answering
+# on 443 with nothing it can offer for the name being asked for.
+#
+# That name must also be the one BotFather was given with /setdomain, or the
+# Telegram Login Widget will render and then quietly refuse to sign anyone in.
 
 game.example.com {
 	reverse_proxy 127.0.0.1:5090
