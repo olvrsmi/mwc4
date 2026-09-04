@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily backup of Mackenzie Walk saved games
+
+[Timer]
+OnCalendar=daily
+# a box that was off at 00:00 still takes its backup when it comes back
+Persistent=true
+
+[Install]
+WantedBy=timers.target

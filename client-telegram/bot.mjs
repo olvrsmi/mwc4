@@ -21,8 +21,8 @@ import { Bot, InlineKeyboard, InputFile, GrammyError, HttpError } from 'grammy'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { createHost, createSessions, printBanner } from '../host/setup.mjs'
-import { renderEmission, RENDERABLE, artPath } from '../host/render.mjs'
+import { createHost, createSessions, printBanner, STATE_DIR } from '../host/setup.mjs'
+import { createArtifacts, RENDERABLE } from '../host/deliver.mjs'
 import { stickerOf, isAnimation } from './sticker.mjs'
 
 // Telegram's own caps. Exceeding either is a 400, not a truncation.
@@ -146,13 +146,25 @@ export function keyboardFor (choices) {
 // The bot
 // ---------------------------------------------------------------------------
 
-/** A session id per chat, namespaced so it cannot collide with a browser one. */
-export const sessionId = (chatId) => `tg${chatId}`
+/**
+ * A session id per player, namespaced so it cannot collide with a browser one.
+ *
+ * Keyed on the Telegram USER id, not the chat id. They are the same number in a
+ * private chat - which is the only kind this bot answers, see below - but the
+ * Login Widget on the web vouches for a user, and this has to be the same id it
+ * hands over or logging in would find nobody's game.
+ */
+export const sessionId = (userId) => `tg${userId}`
+/** Where to send: in a private chat the user id IS the chat id. */
 const chatOf = (id) => id.slice(2)
 
 export function createBot ({
   token,
   host = createHost(),
+  artifacts = createArtifacts({ stateDir: STATE_DIR }),
+  // Shared with the web client when both run in one process, so a tap here and
+  // a turn there cannot interleave over the same saved game.
+  queues = undefined,
   paceMs = Number(process.env.MW_PACE_MS || 1400),
   allow = (process.env.MW_ALLOW || '').split(',').map((s) => s.trim()).filter(Boolean),
   // Supplying botInfo skips the getMe call grammY would otherwise make before
@@ -216,6 +228,10 @@ export function createBot ({
   async function deliver (id, emissions, S) {
     const chatId = chatOf(id)
     const choices = S ? game.choices(S) : []
+    // What goes in the transcript, in the same shape the web client writes: a
+    // chart as the URL of the file it was rendered to, not as bytes. A game
+    // played here has to be readable there.
+    const out = []
     for (let i = 0; i < emissions.length; i++) {
       const e = emissions[i]
       const last = i === emissions.length - 1
@@ -230,11 +246,13 @@ export function createBot ({
 
       if (e.kind === 'text') {
         await sendText(chatId, spoken(e), reply_markup)
+        out.push(e)
         continue
       }
 
       if (e.kind === 'art') {
-        const file = artPath(e.art)
+        const { file, url } = artifacts.art(e)
+        out.push({ ...e, url })
         const line = spoken(e)
         const hasLine = Boolean(line.trim())
         if (!file) {
@@ -277,14 +295,12 @@ export function createBot ({
 
       if (RENDERABLE.has(e.kind)) {
         await action(chatId, 'upload_photo')
-        let png = null
-        try {
-          png = renderEmission(e)
-        } catch (err) {
-          // A chart that will not draw should cost the reading its picture, not
-          // the player their turn. The numbers are in the caption either way.
-          console.error(`  ${chatId}: could not draw a '${e.kind}': ${err.message}`)
-        }
+        // Rendered once, to the same file the web client would have written:
+        // the bytes go to Telegram, the URL goes in the transcript. A chart
+        // that will not draw costs the reading its picture, not the player
+        // their turn - the numbers are in the caption either way.
+        const { png, url } = await artifacts.chart(id, e)
+        out.push({ ...e, png: url })
         if (!png) {
           if (e.caption) await sendText(chatId, e.caption, reply_markup)
           continue
@@ -305,15 +321,19 @@ export function createBot ({
       // But it must not vanish either - that is a message the player was meant
       // to get, gone with nothing said anywhere.
       console.error(`  ${chatId}: no way to deliver a '${e.kind}' emission`)
+      out.push(e)
     }
-    return emissions
+    return out
   }
 
   const sessions = createSessions(host, {
     deliver,
-    // A chat IS the transcript. Keeping a second copy would double every
-    // saved game for a replay nobody asks for.
-    keepLog: false,
+    queues,
+    // The chat is this client's own transcript and it never replays the log.
+    // It is kept anyway, because the browser does replay it: without this, a
+    // player who plays a day in the chat and then opens the web client finds a
+    // game that has silently jumped forward with no record of how.
+    keepLog: true,
     seed: (id) => {
       // stable per chat, so the same chat restarted gets the same worlds only
       // if it is genuinely the same game; the id is the only thing to hand
@@ -354,8 +374,31 @@ export function createBot ({
     return next()
   })
 
+  /**
+   * Private chats only.
+   *
+   * A game is one person's, and the id it is saved under is the player's user
+   * id - which only equals the chat id in a one-to-one chat. In a group the two
+   * diverge, and everyone in the room would be taking turns in whichever game
+   * the chat id happened to name. It is also simply not a game to play in
+   * public: the whole thing is someone's private week at work.
+   */
+  bot.use(async (ctx, next) => {
+    const type = ctx.chat?.type
+    if (type && type !== 'private') {
+      if (ctx.message) {
+        await ctx.reply('This one is played in a private chat. Message me directly.').catch(() => {})
+      }
+      return
+    }
+    return next()
+  })
+
+  /** Who is playing. In a private chat this is also where to send. */
+  const who = (ctx) => String(ctx.from?.id ?? ctx.chat?.id)
+
   bot.command('start', async (ctx) => {
-    const chatId = String(ctx.chat.id)
+    const chatId = who(ctx)
     await guard(chatId, (async () => {
       const opened = await sessions.open(sessionId(chatId))
       // Telegram sends /start whenever someone reopens the bot, so it must not
@@ -366,13 +409,13 @@ export function createBot ({
   })
 
   bot.command('restart', async (ctx) => {
-    const chatId = String(ctx.chat.id)
+    const chatId = who(ctx)
     await guard(chatId, sessions.reset(sessionId(chatId)))
   })
 
   for (const [command, token] of [['help', 'help'], ['status', 'state'], ['market', 'm'], ['skip', 'skip']]) {
     bot.command(command, async (ctx) => {
-      const chatId = String(ctx.chat.id)
+      const chatId = who(ctx)
       await action(chatId, 'typing')
       await guard(chatId, handleToken(chatId, token))
     })
@@ -395,8 +438,7 @@ export function createBot ({
   }
 
   bot.on('callback_query:data', async (ctx) => {
-    // ctx.chat is absent on a callback from an inline context
-    const chatId = String(ctx.chat?.id ?? ctx.from.id)
+    const chatId = who(ctx)
     const data = ctx.callbackQuery.data
     let stale = false
     try {
@@ -414,7 +456,7 @@ export function createBot ({
   })
 
   bot.on('message:text', async (ctx) => {
-    const chatId = String(ctx.chat.id)
+    const chatId = who(ctx)
     await action(chatId, 'typing')
     await guard(chatId, handleToken(chatId, ctx.message.text))
   })

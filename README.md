@@ -184,19 +184,53 @@ so free text keeps working.
 
 ## Clients
 
-The same game, two ways in. Both read the same `.env`, the same saved-game
-directory and the same physics backend, and neither knows the other exists.
+The same game, two ways in, and - when it matters - the same game.
 
 ```
-npm start                  # the browser, on http://localhost:5090
-npm run telegram           # the Telegram bot
+npm start                  # both: the browser on http://localhost:5090, and the bot
+npm run web                # the browser client alone
+npm run telegram           # the bot alone
 ```
 
-The bot needs a token from @BotFather in `TELEGRAM_BOT_TOKEN`. Telegram allows
-exactly one long poll per token and a second one evicts the first, so a laptop
-and a server cannot share a bot: make two, and set `MW_LOCAL=1` to use
+`npm start` runs `server.mjs`, which is what gets deployed: one host, one store,
+one queue, two renderers. That is not tidiness. A saved game is a file and the
+store keeps a hot copy in memory, so two processes over one directory would each
+be certain they had the newer one - which is exactly what happens the moment a
+player is in both. Running them apart is still right for development, when
+nobody is.
+
+What the clients own separately is how a turn looks: the browser gets a page it
+can replay, Telegram gets messages it cannot. What they share is what a turn is.
+
+The bot needs a token from @BotFather in `TELEGRAM_BOT_TOKEN`; with none set,
+`npm start` serves the website alone and says so. Telegram allows exactly one
+long poll per token and a second one evicts the first, so a laptop and a server
+cannot share a bot: make two, and set `MW_LOCAL=1` to use
 `TELEGRAM_BOT_TOKEN_LOCAL` instead. `MW_ALLOW` is an optional comma-separated
-list of Telegram user ids; set it and only those may play.
+list of Telegram user ids; set it and only those may play. The bot answers
+private chats only - a game is one person's, and the id it is saved under is
+theirs.
+
+## Signing in
+
+A game belongs to a subject, which the server decides and the client never
+names: `web<random>` for a guest, `tg<telegram user id>` once someone has signed
+in. It travels in a cookie the server signs with `MW_SECRET`, so a request says
+only what the player did.
+
+Anyone can play without signing in. Signing in - the Telegram Login Widget,
+whose payload is checked against the bot token in `host/auth.mjs` - is what
+joins the browser and the chat into one game:
+
+- **Nothing under their name yet.** The game they were playing as a guest
+  becomes theirs, as it stands.
+- **A game in the chat and nothing much here.** They get the one from the chat.
+- **Two real games.** They are shown both and asked. The one they let go is kept
+  on disk as `tg<id>.<stamp>.bak` rather than deleted.
+
+It needs `MW_BOT_USERNAME`, and it needs the deployed domain registered with
+`/setdomain` in BotFather. Without that the widget renders and then signs nobody
+in, with no error anywhere.
 
 In the chat, every choice arrives as an inline button and as a token you could
 have typed, so the whole game is playable either way. Slash commands are
@@ -284,9 +318,12 @@ checks that a world stepped in ten processes is the world stepped in one, and
 that widening a circuit in text - which the HTTP backend has to do, having no
 qiskit - builds the same circuit qiskit does.
 
-Sessions are one JSON file each under `host/state/`, with the transcript the
-page replays on reload. Every chart is rendered once to `host/state/png/` and
-the page is handed a URL.
+Sessions are one JSON file each under `host/state/`, named by subject, with the
+transcript the page replays on reload. Every chart is rendered once to
+`host/state/png/` and both clients are handed the same URL for it - Telegram
+uploads the bytes and puts the URL in the transcript, so a day played in the
+chat can be read back in the browser with its pictures. Charts older than
+`MW_SWEEP_DAYS` are swept; nothing else here grows.
 
 ## Tunables
 
@@ -294,7 +331,8 @@ All optional, all in `.env.example`: `MW_STEPS` (10 readouts a world),
 `MW_DAY_STEPS` (27), `MW_WEEK_DAYS` (7), `MW_REGEN_STEPS` (9),
 `MW_NIGHT_STEPS` (9), `MW_START_BUDGET`, `MW_BUDGET_FLOOR`, `MW_QUOTA`,
 `MW_WEEK_BONUS`, `MW_UPGRADE_COST`, `MW_PROBATION`, `MW_PROBATION_PROFIT`,
-`MW_COUNTERFACTUAL`, `PORT`, `MW_STATE_DIR`.
+`MW_COUNTERFACTUAL`, `PORT`, `MW_BIND`, `MW_STATE_DIR`, `MW_SECRET`,
+`MW_BOT_USERNAME`, `MW_PUBLIC_URL`, `MW_TRUST_PROXY`, `MW_SWEEP_DAYS`.
 
 Changing `MW_STEPS` invalidates `model/specs/_stats_cache.json`, which holds
 the volatility the prospectus quotes; `npm run warm` recomputes it with the
@@ -304,15 +342,26 @@ local Python.
 
 ```
 npm run doctor           # what this machine is missing for the backend you picked
-npm test                 # the rules, the copy engine, the backends, the chart - no Python
+npm test                 # the rules, identity, both clients - no Python, no network
 npm run copy-check       # copy.yaml, both directions
 npm run dryrun           # a round in the terminal; --model local|http, --png <dir>
 npm run model-test       # the physics, against the real engine
 ```
 
-`npm test` and `npm run copy-check` need nothing but `npm ci`, so they run on a
-fresh clone and in CI. `npm run model-test` and `npm run warm` need the local
+`npm test` runs four files: `selftest.mjs` (the rules and the chart),
+`auth.mjs` (the two signature schemes identity rests on), `web.mjs` (a real
+server on a socket: that a request cannot name another player's game, every way
+a login can land, and one game played through both clients at once) and
+`telegram.mjs` (the chat client, with grammY driven in memory). It and
+`npm run copy-check` need nothing but `npm ci`, so they run on a fresh clone and
+in CI. `npm run model-test` and `npm run warm` need the local
 Python; `npm run dryrun --model http` spends credits.
+
+## Deploying
+
+`deploy/` has the whole of it: a systemd unit, a Caddyfile, two backup units and
+a runbook. One Node process behind Caddy on a Hetzner box, deployed with
+`git pull && npm ci && systemctl restart`. See `deploy/README.md`.
 
 ## Third-party code
 

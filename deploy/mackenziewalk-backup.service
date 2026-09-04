@@ -1,0 +1,14 @@
+# One tar of the saved games, keeping the last fourteen.
+#
+# The state directory is the only thing on the box that cannot be rebuilt from
+# git: a few hundred kilobytes of JSON that is somebody's week.
+
+[Unit]
+Description=Back up Mackenzie Walk saved games
+
+[Service]
+Type=oneshot
+User=mw
+Group=mw
+WorkingDirectory=/opt/mackenziewalk
+ExecStart=/bin/sh -c 'mkdir -p backups && tar czf backups/state-$(date +%%Y%%m%%d-%%H%%M%%S).tar.gz state && ls -1t backups/state-*.tar.gz | tail -n +15 | xargs -r rm --'

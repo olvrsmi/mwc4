@@ -21,6 +21,7 @@ import { createGame } from '../core/game.mjs'
 import { createFakeModel } from '../core/fake-model.mjs'
 import { loadSpecs } from '../host/specs.mjs'
 import { createStore } from '../host/store.mjs'
+import { createArtifacts } from '../host/deliver.mjs'
 import { artPath, ART } from '../host/render.mjs'
 import { createBot, toHtml, splitText, keyboardFor, sessionId, MAX_TEXT, MAX_CAPTION } from '../client-telegram/bot.mjs'
 import { stickerOf, STICKER_SIDE, isAnimation } from '../client-telegram/sticker.mjs'
@@ -52,7 +53,9 @@ async function harness ({ fail = null, seedDir = null } = {}) {
   const game = createGame({ copy, model })
   const host = { rules: game.rules, loaded: specs, copy, model, game, store: createStore(dir) }
   const sent = []
-  const made = createBot({ token: '424242:TEST-TOKEN', host, paceMs: 0, botInfo: BOT_INFO })
+  // charts to the scratch directory, not to the real host/state/png
+  const artifacts = createArtifacts({ stateDir: dir, log: { log () {}, error () {} } })
+  const made = createBot({ token: '424242:TEST-TOKEN', host, artifacts, paceMs: 0, botInfo: BOT_INFO })
   let messageId = 100
   made.bot.api.config.use(async (prev, method, payload) => {
     sent.push({ method, payload })
@@ -64,13 +67,22 @@ async function harness ({ fail = null, seedDir = null } = {}) {
 }
 
 let updateId = 0
+// In a private chat - the only kind the bot answers - Telegram's chat.id and
+// from.id are the same number, and the bot keys a game on the user. These
+// fixtures used to give them different values, which passed only for as long as
+// the chat was what identified a player.
 const say = (bot, text, chat = 42) => bot.handleUpdate({
   update_id: ++updateId,
-  message: { message_id: ++updateId, date: 0, text, chat: { id: chat, type: 'private' }, from: { id: 7, is_bot: false, first_name: 'Tester' } },
+  message: { message_id: ++updateId, date: 0, text, chat: { id: chat, type: 'private' }, from: { id: chat, is_bot: false, first_name: 'Tester' } },
 })
 const tap = (bot, data, chat = 42) => bot.handleUpdate({
   update_id: ++updateId,
-  callback_query: { id: String(++updateId), data, chat_instance: 'x', from: { id: 7, is_bot: false, first_name: 'Tester' }, message: { message_id: 1, date: 0, chat: { id: chat, type: 'private' } } },
+  callback_query: { id: String(++updateId), data, chat_instance: 'x', from: { id: chat, is_bot: false, first_name: 'Tester' }, message: { message_id: 1, date: 0, chat: { id: chat, type: 'private' } } },
+})
+/** A message from a group, which the bot should not play. */
+const sayInGroup = (bot, text, chat = -100123) => bot.handleUpdate({
+  update_id: ++updateId,
+  message: { message_id: ++updateId, date: 0, text, chat: { id: chat, type: 'supergroup' }, from: { id: 7, is_bot: false, first_name: 'Tester' } },
 })
 
 const msgs = (sent) => sent.filter((s) => s.method === 'sendMessage')
@@ -255,7 +267,7 @@ section('/start, /restart and the commands')
   const h = await harness()
   await h.bot.handleUpdate({
     update_id: ++updateId,
-    message: { message_id: ++updateId, date: 0, text: '/start', entities: [{ type: 'bot_command', offset: 0, length: 6 }], chat: { id: 42, type: 'private' }, from: { id: 7, is_bot: false, first_name: 'T' } },
+    message: { message_id: ++updateId, date: 0, text: '/start', entities: [{ type: 'bot_command', offset: 0, length: 6 }], chat: { id: 42, type: 'private' }, from: { id: 42, is_bot: false, first_name: 'T' } },
   })
   ok('/start on a new chat plays the opening', h.sent.some((s) => s.method === 'sendSticker'))
   await say(h.bot, 'skip')
@@ -266,7 +278,7 @@ section('/start, /restart and the commands')
   h.sent.length = 0
   await h.bot.handleUpdate({
     update_id: ++updateId,
-    message: { message_id: ++updateId, date: 0, text: '/start', entities: [{ type: 'bot_command', offset: 0, length: 6 }], chat: { id: 42, type: 'private' }, from: { id: 7, is_bot: false, first_name: 'T' } },
+    message: { message_id: ++updateId, date: 0, text: '/start', entities: [{ type: 'bot_command', offset: 0, length: 6 }], chat: { id: 42, type: 'private' }, from: { id: 42, is_bot: false, first_name: 'T' } },
   })
   const after = (await h.host.store.load(sessionId('42'))).session
   ok('/start on an existing chat does NOT wipe it', after.run !== null && after.balance === 500)
@@ -275,7 +287,7 @@ section('/start, /restart and the commands')
   h.sent.length = 0
   await h.bot.handleUpdate({
     update_id: ++updateId,
-    message: { message_id: ++updateId, date: 0, text: '/restart', entities: [{ type: 'bot_command', offset: 0, length: 8 }], chat: { id: 42, type: 'private' }, from: { id: 7, is_bot: false, first_name: 'T' } },
+    message: { message_id: ++updateId, date: 0, text: '/restart', entities: [{ type: 'bot_command', offset: 0, length: 8 }], chat: { id: 42, type: 'private' }, from: { id: 42, is_bot: false, first_name: 'T' } },
   })
   const wiped = (await h.host.store.load(sessionId('42'))).session
   ok('/restart throws the game away', wiped.run === null && wiped.balance === 1000 && wiped.rounds === 0)
@@ -460,6 +472,28 @@ section('when Telegram says no')
   ok('a turn whose delivery failed is still saved', now === at + 1,
      `world was at ${at} readouts, now ${now} — a lost save would replay the step`)
   await rm(dir, { recursive: true, force: true })
+}
+
+// ---------------------------------------------------------------------------
+section('a game belongs to a person, not to a room')
+// ---------------------------------------------------------------------------
+{
+  const h = await harness()
+  await sayInGroup(h.bot, 'hello')
+  ok('a group chat is not played', !(await h.host.store.load(sessionId('-100123'))))
+  ok('and nobody in it is walked in either', !(await h.host.store.load(sessionId('7'))))
+  ok('it is told why, once', texts(h.sent).length === 1 && /private chat/i.test(texts(h.sent)[0]),
+     JSON.stringify(texts(h.sent)))
+  await h.cleanup()
+}
+{
+  // the id the Login Widget vouches for is the user id, so that is what a game
+  // has to be saved under - see host/auth.mjs
+  const h = await harness()
+  await say(h.bot, 'hello', 5657145687)
+  ok('a game is saved under the player, ready for the web client to find',
+     Boolean(await h.host.store.load('tg5657145687')))
+  await h.cleanup()
 }
 
 console.log(`\n  ${passes} passed${failures ? `, ${failures} FAILED` : ', all good'}\n`)

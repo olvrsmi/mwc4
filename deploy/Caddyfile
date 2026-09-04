@@ -1,0 +1,21 @@
+# Caddyfile - the whole of the TLS story.
+#
+#   cp deploy/Caddyfile /etc/caddy/Caddyfile   (then put the real domain in)
+#   systemctl reload caddy
+#
+# Caddy gets and renews the certificate on its own. The domain here must be the
+# same one BotFather was given with /setdomain, or the Telegram Login Widget
+# will render and then quietly refuse to sign anyone in.
+
+game.example.com {
+	reverse_proxy 127.0.0.1:5090
+
+	# The game's own charts are served with a long cache lifetime; everything
+	# else is a turn, and must never be cached.
+	encode gzip
+
+	log {
+		output file /var/log/caddy/mackenziewalk.log
+		format console
+	}
+}

@@ -5,7 +5,7 @@
 // Everything here runs with no Python and no network. What needs the real
 // engine lives in model/selftest.py.
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, dirname, resolve } from 'node:path'
@@ -534,6 +534,32 @@ section('saving')
   ok('one file per session', (await store.ids()).join() === 'abc')
   await store.remove('abc')
   ok('removed', (await store.ids()).length === 0)
+
+  // renaming is how an anonymous browser game becomes a Telegram player's
+  await store.save('web0123456789ab', { session: S, log: [{ kind: 'text', text: 'hi' }] })
+  await store.rename('web0123456789ab', 'tg777')
+  ok('a game can be renamed onto another id', store.has('tg777') && !store.has('web0123456789ab'))
+  ok('and it is the same game', (await store.load('tg777')).session.world.info.id === S.world.info.id)
+  ok('the memory of the old name goes with it', (await store.ids()).join() === 'tg777')
+  await store.save('web0123456789ab', { session: S, log: [] })
+  ok('renaming over a game refuses by default',
+     await throws(() => store.rename('web0123456789ab', 'tg777')))
+  const kept = await store.backup('tg777')
+  ok('a game can be kept aside first', Boolean(kept) && existsSync(kept))
+  ok('and then written over deliberately',
+     await store.rename('web0123456789ab', 'tg777', { overwrite: true }))
+  await rm(dir, { recursive: true, force: true })
+}
+{
+  // Open to anyone, an unbounded cache would hold every game anybody ever
+  // started. Every save writes the file first, so dropping one costs a read.
+  const dir = await mkdtemp(join(tmpdir(), 'mw4-cache-'))
+  const store = createStore(dir, { keepLive: 3 })
+  for (let i = 0; i < 10; i++) await store.save(`web0000000${i}`, { session: { n: i }, log: [] })
+  ok('the cache is bounded', store.cached === 3, `held ${store.cached}`)
+  ok('all ten games are still on disk', (await store.ids()).length === 10)
+  const cold = await store.load('web00000000')
+  ok('a dropped game reads back whole', cold?.session.n === 0)
   await rm(dir, { recursive: true, force: true })
 }
 

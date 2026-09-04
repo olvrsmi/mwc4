@@ -196,6 +196,34 @@ head('the clients')
   }
 }
 
+head('signing in')
+{
+  // None of this is fatal: the game plays without any of it. All of it is
+  // needed before anyone can carry a game between the browser and the chat.
+  if (process.env.MW_SECRET) {
+    ok('cookies: MW_SECRET is set', 'saved games are found again after a restart')
+  } else {
+    bad('cookies: MW_SECRET is not set',
+      'a new secret is made at every start, so a restart signs everyone out.\n' +
+      '         fine on a laptop; set it before deploying:  openssl rand -hex 32', false)
+  }
+  const token = process.env[process.env.MW_LOCAL === '1' ? 'TELEGRAM_BOT_TOKEN_LOCAL' : 'TELEGRAM_BOT_TOKEN']
+  const url = process.env.MW_PUBLIC_URL || ''
+  if (process.env.MW_BOT_USERNAME && token) {
+    ok(`telegram login: offered as @${process.env.MW_BOT_USERNAME}`,
+      'the widget only signs anyone in on the domain @BotFather was given with\n' +
+      '         /setdomain — get that wrong and it renders, then does nothing, silently')
+  } else {
+    bad('telegram login: not offered',
+      `needs ${[!token && 'a bot token', !process.env.MW_BOT_USERNAME && 'MW_BOT_USERNAME']
+        .filter(Boolean).join(' and ')}. Without it the browser plays guests only`, false)
+  }
+  if (url && !/^https:/i.test(url) && !/localhost|127\.0\.0\.1/.test(url)) {
+    bad('cookies: MW_PUBLIC_URL is not https',
+      'the session cookie is only marked Secure for an https origin', false)
+  }
+}
+
 // ---------------------------------------------------------------------------
 console.log()
 if (fatal) {

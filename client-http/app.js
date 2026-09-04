@@ -3,6 +3,11 @@
 // Every emission is a bordered box. Text is a small markdown subset, a chart is
 // the PNG the host rendered, art is a picture with its line. Choices become
 // buttons, each sending the same token the player could have typed.
+//
+// It no longer knows which game it is playing. It used to keep an id in
+// localStorage and send it with every request; the server keeps that now, in a
+// cookie the page cannot read or edit, so what goes over the wire is only ever
+// what the player did.
 
 const $ = (id) => document.getElementById(id)
 const log = $('log')
@@ -11,11 +16,12 @@ const form = $('say')
 const input = $('text')
 const statusEl = $('status')
 const resetBtn = $('reset')
+const accountEl = $('account')
 
-const KEY = 'mw4.session'
-let sid = null
-try { sid = localStorage.getItem(KEY) } catch { sid = null }
 let busy = false
+// What we last knew of the game, so a turn taken in Telegram is noticed when
+// the player comes back to this tab.
+let seen = null
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 
@@ -80,11 +86,111 @@ function renderStatus (s) {
   statusEl.textContent = line
 }
 
-async function post (path, body) {
-  const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+async function post (path, body = {}) {
+  const res = await fetch(path, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    // the cookie is the whole of the request's claim about who is playing
+    credentials: 'same-origin', body: JSON.stringify(body),
+  })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error || `${res.status}`)
   return data
+}
+
+/**
+ * Enough of the game's standing to notice it moved without us.
+ *
+ * The transcript is capped, so its length alone stops changing on a long game -
+ * hence the rest, which keep moving for as long as anyone is playing.
+ */
+const mark = (r) => {
+  const s = r.summary || {}
+  return [r.logLength, s.day, s.dayStep, s.rounds, s.balance, s.expect].join('|')
+}
+
+// ---------------------------------------------------------------------------
+// Signing in
+// ---------------------------------------------------------------------------
+
+/** The Login Widget, which will only render on the domain BotFather was told. */
+function showLogin (botUsername) {
+  accountEl.innerHTML = '<small>Playing as a guest. Sign in to carry this game on in Telegram.</small><br>'
+  const s = document.createElement('script')
+  s.async = true
+  s.src = 'https://telegram.org/js/telegram-widget.js?22'
+  s.setAttribute('data-telegram-login', botUsername)
+  s.setAttribute('data-size', 'medium')
+  s.setAttribute('data-userpic', 'false')
+  s.setAttribute('data-request-access', 'write')
+  s.setAttribute('data-onauth', 'onTelegramAuth(user)')
+  accountEl.appendChild(s)
+}
+
+function showAccount (r) {
+  accountEl.innerHTML = ''
+  if (r.kind === 'telegram') {
+    const who = r.name ? `Signed in as ${esc(r.name)}` : 'Signed in with Telegram'
+    accountEl.innerHTML = `<small>${who}. This game is waiting for you in the chat too.</small> `
+    const out = document.createElement('button')
+    out.type = 'button'
+    out.textContent = 'sign out'
+    out.onclick = async () => {
+      if (busy) return
+      setBusy(true)
+      try { show(await post('/api/auth/logout')) } finally { setBusy(false) }
+    }
+    accountEl.appendChild(out)
+    return
+  }
+  if (r.canLogin && r.botUsername) showLogin(r.botUsername)
+}
+
+/**
+ * Two games, one player: the one they have been playing here as a guest, and
+ * one already under their name in Telegram. Neither is ours to throw away.
+ */
+function showChoice (choose) {
+  log.innerHTML = ''
+  renderChoices([])
+  const div = box()
+  const line = (s) => `day ${s.day}, ${s.rounds} round${s.rounds === 1 ? '' : 's'} played, ` +
+                      `balance ${s.balance}G` + (s.world ? `, in ${esc(s.world)}` : '')
+  div.innerHTML =
+    '<b>You already have a game in Telegram.</b><br>' +
+    'Only one can carry on. The other is kept on the server, but you will not be able to reach it from here.<br><br>' +
+    `<b>In Telegram:</b> ${line(choose.telegram)}<br>` +
+    `<b>Here, as a guest:</b> ${line(choose.anonymous)}<br><br>`
+  for (const [keep, label] of [['telegram', 'keep the Telegram game'], ['anonymous', 'keep this one']]) {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.textContent = label
+    b.onclick = async () => {
+      if (busy) return
+      setBusy(true)
+      try { show(await post('/api/auth/claim', { keep })) } catch (e) {
+        box().textContent = `Could not finish signing in: ${e.message}`
+      } finally { setBusy(false); scroll() }
+    }
+    div.appendChild(b)
+    div.appendChild(document.createTextNode(' '))
+  }
+  scroll()
+}
+
+// The widget calls this by name, from its own iframe, so it has to be global.
+window.onTelegramAuth = async (user) => {
+  if (busy) return
+  setBusy(true)
+  try {
+    const r = await post('/api/auth/telegram', { user })
+    if (r.choose) return showChoice(r.choose)
+    show(r)
+  } catch (e) {
+    box().textContent = `Could not sign in: ${e.message}`
+  } finally {
+    setBusy(false)
+    scroll()
+  }
 }
 
 function setBusy (on) {
@@ -95,16 +201,20 @@ function setBusy (on) {
 
 const scroll = () => window.scrollTo(0, document.body.scrollHeight)
 
+/** A whole standing, drawn from nothing. */
+function show (r) {
+  log.innerHTML = ''
+  for (const e of r.log || []) render(e)
+  renderChoices(r.choices)
+  renderStatus(r.summary)
+  showAccount(r)
+  seen = mark(r)
+}
+
 async function boot (reset = false) {
   setBusy(true)
   try {
-    const r = await post(reset ? '/api/reset' : '/api/session', { id: sid })
-    sid = r.id
-    try { localStorage.setItem(KEY, sid) } catch { /* private mode */ }
-    log.innerHTML = ''
-    for (const e of r.log) render(e)
-    renderChoices(r.choices)
-    renderStatus(r.summary)
+    show(await post(reset ? '/api/reset' : '/api/session'))
   } catch (e) {
     const div = box()
     div.textContent = `Could not reach the game: ${e.message}`
@@ -115,15 +225,37 @@ async function boot (reset = false) {
   }
 }
 
+/**
+ * Pick up anything that happened elsewhere.
+ *
+ * The same game can be played in Telegram, so a tab left open can be looking at
+ * a week that has since moved on. Checking when the tab is looked at again is
+ * enough - and it costs nothing when nothing has changed.
+ */
+async function resync () {
+  if (busy || document.hidden) return
+  try {
+    const r = await post('/api/session')
+    if (mark(r) === seen) return showAccount(r)
+    show(r)
+    scroll()
+  } catch { /* offline, or the server is restarting: the next look will do */ }
+}
+document.addEventListener('visibilitychange', resync)
+window.addEventListener('focus', resync)
+
 async function say (token, label) {
   if (busy) return
   setBusy(true)
   echo(label && label !== token ? `${label}` : token)
   try {
-    const r = await post('/api/say', { id: sid, text: token })
+    const r = await post('/api/say', { text: token })
+    // the game this browser was in is gone; what came back is a whole new one
+    if (r.reopened) return show(r)
     for (const e of r.emissions) render(e)
     renderChoices(r.choices)
     renderStatus(r.summary)
+    seen = mark(r)
   } catch (e) {
     const div = box()
     div.textContent = `Something went wrong: ${e.message}`

@@ -1,0 +1,44 @@
+# mackenziewalk.service - the deployed program, both clients in one process.
+#
+#   cp deploy/mackenziewalk.service /etc/systemd/system/
+#   systemctl enable --now mackenziewalk
+#
+# Note what is NOT here: EnvironmentFile. The app reads its own .env, from
+# beside the code, with a parser that already knows the awkward cases - an
+# unquoted trailing comment carried into a bot token comes back as a 401 that
+# looks like a bad token. Pointing systemd at the same file would mean two
+# parsers disagreeing about one line, so there is only one.
+
+[Unit]
+Description=Office 4B, 6 Mackenzie Walk
+Documentation=https://github.com/olvrsmi/mwc4
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mw
+Group=mw
+WorkingDirectory=/opt/mackenziewalk
+ExecStart=/usr/bin/node server.mjs
+Restart=always
+RestartSec=5
+
+# 78 is EX_CONFIG. A missing MW_SECRET or an unreadable copy.yaml will not fix
+# itself by being started again, and a service that crash-loops on a bad deploy
+# buries the one log line that says why.
+RestartPreventExitStatus=78
+StartLimitBurst=5
+StartLimitIntervalSec=120
+
+# The process drains the turns in flight on SIGTERM. Give it room to, but not
+# so much that a stuck model call holds up a deploy.
+KillSignal=SIGTERM
+TimeoutStopSec=25
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mackenziewalk
+
+[Install]
+WantedBy=multi-user.target

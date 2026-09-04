@@ -11,13 +11,22 @@
     background-color: #000000;
     color: #FFFFFF;
   }
-  header, footer, #choices, #say{
+  header, footer, #choices, #say, #account{
     max-width: 40em;
     text-align: center;
     margin: 0 auto 0.5em;
   }
   footer{
     margin-top: 3em;
+  }
+  #account{
+    margin-top: 1.5em;
+    color: #909090;
+  }
+  /* the widget's iframe sits on its own line, centred with everything else */
+  #account iframe{
+    margin: 0.5em auto 0;
+    display: block;
   }
   #log{
     max-width: 40em;
@@ -38,7 +47,10 @@
   <input id="text" type="text" autocomplete="off" spellcheck="false" placeholder="type a command, or help">
   <button type="submit">send</button>
 </form>
-<footer><button id="reset" type="button">start over</button></footer>
+<footer>
+  <button id="reset" type="button">start over</button>
+  <div id="account"></div>
+</footer>
 <script src="app.js" type="module"></script>
 </body>
 </html>

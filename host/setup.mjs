@@ -142,9 +142,14 @@ export function createSessions (host, {
   deliver = async (_id, emissions) => emissions,
   keepLog = true,
   seed = () => (Math.random() * 2 ** 31) | 0,
+  // Two clients over one store must share this map or they do not exclude each
+  // other at all: a player tapping a button in Telegram while a turn from the
+  // browser is still running would interleave two writes to the same game.
+  // Each client still gets its own `deliver` and its own `keepLog`; the queue
+  // is the one thing that has to be common.
+  queues = new Map(),
 } = {}) {
   const { game, store } = host
-  const queues = new Map()
 
   function enqueue (id, job) {
     const prev = queues.get(id) || Promise.resolve()
@@ -155,24 +160,52 @@ export function createSessions (host, {
     return next
   }
 
-  /** The saved game for this id, or a new one played up to its first question. */
-  async function open (id, { fresh = false } = {}) {
-    return enqueue(id, async () => {
-      if (!fresh) {
-        const had = await store.load(id)
-        if (had) return { id, rec: had, fresh: false }
-      }
-      const S = game.newSession(seed(id))
-      const rec = { session: S, log: [] }
-      const r = await game.start(S)
-      // Unlike a turn, this is NOT saved when delivery fails, and deliberately:
-      // the only thing lost is the opening, and playing it again is better than
-      // a player who never saw it being dropped straight into the game.
-      const emissions = await deliver(id, r.emissions, S)
-      if (keepLog) rec.log.push(...emissions)
-      await store.save(id, rec)
-      return { id, rec, fresh: true, emissions, choices: r.choices, summary: r.summary }
-    })
+  /**
+   * One job holding several sessions at once, for the rare thing that touches
+   * two games - logging in, which may move an anonymous game onto a Telegram
+   * id, or replace one with the other.
+   *
+   * It waits on every queue together rather than taking them one at a time, so
+   * two of these running at once cannot each hold what the other is waiting
+   * for.
+   */
+  function enqueueAll (ids, job) {
+    const held = [...new Set(ids)]
+    const prev = Promise.all(held.map((id) => queues.get(id) || Promise.resolve()))
+    const next = prev.then(job, job)
+    const quiet = next.catch(() => {})
+    for (const id of held) queues.set(id, quiet)
+    return next
+  }
+
+  /**
+   * The saved game for this id, or a new one played up to its first question.
+   *
+   * `openHeld` is the same thing without taking the queue, and is ONLY for a
+   * caller already inside a job holding this id - a login, which has to look at
+   * two games at once. Calling plain `open` from in there would wait on the
+   * queue entry the caller is itself standing in, which is a deadlock and looks
+   * exactly like a hung request.
+   */
+  async function openHeld (id, { fresh = false } = {}) {
+    if (!fresh) {
+      const had = await store.load(id)
+      if (had) return { id, rec: had, fresh: false }
+    }
+    const S = game.newSession(seed(id))
+    const rec = { session: S, log: [] }
+    const r = await game.start(S)
+    // Unlike a turn, this is NOT saved when delivery fails, and deliberately:
+    // the only thing lost is the opening, and playing it again is better than
+    // a player who never saw it being dropped straight into the game.
+    const emissions = await deliver(id, r.emissions, S)
+    if (keepLog) rec.log.push(...emissions)
+    await store.save(id, rec)
+    return { id, rec, fresh: true, emissions, choices: r.choices, summary: r.summary }
+  }
+
+  async function open (id, options) {
+    return enqueue(id, () => openHeld(id, options))
   }
 
   /**
@@ -219,5 +252,5 @@ export function createSessions (host, {
     return open(id, { fresh: true })
   }
 
-  return { open, turn, reset, enqueue }
+  return { open, openHeld, turn, reset, enqueue, enqueueAll, queues }
 }
