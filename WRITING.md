@@ -66,6 +66,7 @@ sequences:
 | `text` | what they say |
 | `choices` | keyed `a`, `b`, `c`… - **any number**. Each has a `label` and a `reply`, and may carry its own `art` and `speaker` |
 | `ask` | capture what the player types next into a named variable |
+| `delay` | seconds to wait before this line arrives - see [Timing](#timing) |
 
 Choices **colour the moment and rejoin**: the reply plays, then the scene
 carries on from the next node. There is no branching to track. The key is the
@@ -98,6 +99,51 @@ would otherwise swallow the emphasis in whatever line you put their answer in.
 On a choice or an `ask`: `coherence: 0.04` as a delta on the player's qubit,
 clamped to 0…1, and `unlock: some_id`, which notes an id for later and does
 nothing else yet. Scenes deliberately cannot grant money.
+
+### Timing
+
+A turn can produce several messages. They arrive one at a time, each waiting
+a moment first, so a scene written as someone talking reads as someone
+talking. The gaps are yours, in **seconds**, at the top of `copy.yaml`:
+
+```yaml
+pacing:
+  minimum: 0.6      # under every message, the game's own included
+  scene: 1.4        # a line in a sequence or a beat
+  max: 20           # a ceiling, so a typo cannot park the game
+  scenes:
+    tutorial: 3     # this one scene, instead of `scene`
+```
+
+`minimum` is the one that stops a burst landing all at once. `scene` is
+dramatic timing on top of it, which is why it is longer.
+
+Any single line can say its own, and this is where most of the feel is:
+
+```yaml
+    - text: |
+        ...
+      delay: 3
+    - text: |
+        _ding_
+      delay: 0.4
+    - text: |
+        Catch you on a drinkfood break maybe.
+```
+
+A choice's `reply` takes a `delay` the same way, and so does a beat. The
+number is the gap **before** that message; the first message of a turn never
+waits, because it is the answer to what the player just did.
+
+Nothing may be quicker than `minimum` or slower than `max` — a `delay: 1400`
+meant as milliseconds is caught by `copy-check` rather than stopping the game
+for twenty-three minutes. To see the rhythm without playing it:
+
+```
+npm run dryrun
+```
+
+which prints a `[wait ]` line for every gap.
 
 ### Placeholders
 
@@ -154,7 +200,9 @@ beats:
 
 A beat that is just text can be a bare string. Choices work as in a scene and
 carry the same two effects; an effect on the beat itself applies however the
-player answers.
+player answers. A beat and its choices take a `delay` as a scene's node does -
+see [Timing](#timing) - though a bare string cannot, since there is nowhere to
+hang it; give it `text:` and it can.
 
 ### What a beat interrupts
 

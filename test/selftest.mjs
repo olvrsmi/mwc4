@@ -15,6 +15,7 @@ import { parse as parseYaml } from 'yaml'
 
 import { createCopy } from '../core/copy.mjs'
 import { createGame, HELP_SCENE } from '../core/game.mjs'
+import { readPacing, sceneDelay, withDelays, DEFAULT_PACING } from '../core/pacing.mjs'
 import { createFakeModel, syntheticWorlds } from '../core/fake-model.mjs'
 import * as story from '../core/story.mjs'
 import { basePrice, quote, priceReturn, valueFactor, overview, prospectus } from '../core/pricing.mjs'
@@ -512,6 +513,68 @@ section('choices say where they came from')
   // /help reads a scene back rather than performing it
   const narrated = story.narrate(g4.copy, E, COPY.help_scene || 'voice')
   ok('narrating is not paced', narrated.length > 0 && narrated.every((e) => e.pace === false))
+}
+
+// ---------------------------------------------------------------------------
+section('timing')
+{
+  // The dials, as a copy editor writes them: seconds in, milliseconds out.
+  const { copy } = mk(130, {}, { copySource: {
+    ...COPY, pacing: { minimum: 0.5, scene: 2, max: 10, scenes: { tutorial: 4 } },
+  } })
+  const P = readPacing(copy)
+  ok('seconds in copy.yaml become milliseconds on the emission',
+     P.minimum === 500 && P.scene === 2000 && P.scenes.tutorial === 4000, JSON.stringify(P))
+
+  // The floor is a floor: a line cannot duck under it, and nothing can be
+  // slower than the ceiling.
+  ok('a delay under the minimum is raised to it',
+     sceneDelay(copy, 'intro', { delay: 0.1 }) === 500)
+  ok('and one over the maximum is capped',
+     sceneDelay(copy, 'intro', { delay: 9999 }) === 10_000)
+  ok("a node's own delay beats its scene's",
+     sceneDelay(copy, 'tutorial', { delay: 5 }) === 5000)
+  ok("a scene's beats the default",
+     sceneDelay(copy, 'tutorial', {}) === 4000 && sceneDelay(copy, 'intro', {}) === 2000)
+
+  // A number nobody can act on should say so where every other copy problem
+  // is said, not be quietly treated as zero.
+  const { copy: bad } = mk(131, {}, { copySource: { ...COPY, pacing: { minimum: 'soon' } } })
+  readPacing(bad)
+  ok('a delay that is not a number is noted as a copy problem',
+     bad.problems.some((p) => /pacing: minimum/.test(p)), bad.problems.join(' | '))
+  ok('and the default stands in for it', readPacing(bad).minimum === DEFAULT_PACING.minimum * 1000)
+
+  // Absent entirely - an older copy.yaml, or one a writer has not touched.
+  const { copy: none } = mk(132, {}, { copySource: { ...COPY, pacing: undefined } })
+  ok('copy.yaml with no pacing block still paces',
+     readPacing(none).scene === DEFAULT_PACING.scene * 1000 && none.problems.length === 0)
+
+  // The whole point: nothing leaves the game without a gap in front of it.
+  const { game, S } = mk(133)
+  const opened = await game.start(S)
+  ok('every emission of the opening carries a delay',
+     opened.emissions.length > 0 && opened.emissions.every((e) => Number.isFinite(e.delay)))
+  ok('and a scene line waits longer than the minimum',
+     opened.emissions.every((e) => e.delay >= readPacing(game.copy).minimum) &&
+     opened.emissions.some((e) => e.pace && e.delay > readPacing(game.copy).minimum))
+
+  const { game: g2, S: T } = mk(134)
+  await skipOpening(g2, T)
+  const plain = await g2.handle(T, 'state')
+  const floor = readPacing(g2.copy).minimum
+  ok("the game's own messages take the minimum, not a scene's timing",
+     plain.emissions.length > 0 && plain.emissions.every((e) => e.delay === floor && !e.pace),
+     plain.emissions.map((e) => e.delay).join())
+
+  const read = await g2.handle(T, 'help')
+  ok('a scene read back by help is unpaced but still spaced out',
+     read.emissions.every((e) => e.delay === floor))
+
+  // An emission the game did not make - the apology in setup.mjs - must still
+  // be safe to hand a client.
+  ok('an emission with no delay of its own gets the minimum',
+     withDelays(g2.copy, [{ kind: 'text', text: 'x' }])[0].delay === floor)
 }
 
 // ---------------------------------------------------------------------------

@@ -55,7 +55,7 @@ async function harness ({ fail = null, seedDir = null } = {}) {
   const sent = []
   // charts to the scratch directory, not to the real host/state/png
   const artifacts = createArtifacts({ stateDir: dir, log: { log () {}, error () {} } })
-  const made = createBot({ token: '424242:TEST-TOKEN', host, artifacts, paceMs: 0, botInfo: BOT_INFO })
+  const made = createBot({ token: '424242:TEST-TOKEN', host, artifacts, pace: 0, botInfo: BOT_INFO })
   let messageId = 100
   made.bot.api.config.use(async (prev, method, payload) => {
     sent.push({ method, payload })

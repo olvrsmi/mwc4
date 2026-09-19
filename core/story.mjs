@@ -17,11 +17,15 @@
 //
 // Both may carry two effects, on a choice or on the node: `coherence:` as a
 // delta on the player's qubit, and `unlock:` as an id noted for later.
+//
+// Both may also carry `delay:`, in seconds - how long that line waits before
+// it arrives. See pacing.mjs; the number is resolved here, where the node is,
+// and the waiting is a client's job.
 
 import { money } from './pricing.mjs'
+import { sceneDelay } from './pacing.mjs'
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
-const text = (t) => ({ kind: 'text', text: t })
 
 /** The context every line in a scene can read. */
 export function seqCtx (S) {
@@ -35,14 +39,25 @@ export function seqCtx (S) {
   }
 }
 
-/** One node as emissions. A picture carries its line; a renderer decides how. */
-function nodeEmit (copy, S, node, tpl) {
+/**
+ * One node as emissions. A picture carries its line; a renderer decides how.
+ *
+ * `id` names the scene, for the per-scene pacing default. `pace: false` is for
+ * lines read back rather than performed - see `narrate` - and takes no timing
+ * with it, so they fall to the minimum every message gets.
+ */
+function nodeEmit (copy, S, node, tpl, { id = S.seq?.id ?? null, pace = true } = {}) {
   const ctx = seqCtx(S)
-  const body = typeof tpl === 'string' ? copy.render(tpl, ctx, `sequences.${S.seq?.id ?? '?'}`) : null
+  const body = typeof tpl === 'string' ? copy.render(tpl, ctx, `sequences.${id ?? '?'}`) : null
   const speaker = node.speaker ? copy.render(String(node.speaker), ctx) : null
-  if (node.art) return [{ kind: 'art', art: String(node.art), speaker, text: body, pace: true }]
-  return body === null ? [] : [{ kind: 'text', speaker, text: body, pace: true }]
+  const timing = pace ? { pace: true, delay: sceneDelay(copy, id, node) } : { pace: false }
+  if (node.art) return [{ kind: 'art', art: String(node.art), speaker, text: body, ...timing }]
+  return body === null ? [] : [{ kind: 'text', speaker, text: body, ...timing }]
 }
+
+/** A beat's one line, timed the way a scene's node is. */
+const beatLine = (copy, id, spec, body) =>
+  ({ kind: 'text', text: body, pace: true, delay: sceneDelay(copy, id, spec) })
 
 /**
  * Whatever the player typed, made safe to drop into a writer's line.
@@ -121,9 +136,9 @@ export function narrate (copy, S, id) {
   // Unpaced, deliberately. A scene is performed a beat at a time because
   // someone is talking; this is the same words read back on request, and a
   // player who asks how the game works should not wait out the dramatic
-  // timing to be told.
-  return nodes.flatMap((node) => nodeEmit(copy, S, node || {}, node?.text))
-    .map((e) => ({ ...e, pace: false }))
+  // timing to be told. They still arrive one at a time - the minimum under
+  // every message is not dramatic timing, it is not sending six at once.
+  return nodes.flatMap((node) => nodeEmit(copy, S, node || {}, node?.text, { id, pace: false }))
 }
 
 /** The choices a scene is waiting on, or none. */
@@ -157,7 +172,8 @@ export function answerSequence (copy, S, raw) {
   applyEffects(S, choice)
   S.seq.at += 1
   S.seq.awaiting = null
-  const reply = nodeEmit(copy, S, { speaker: choice.speaker, art: choice.art }, choice.reply)
+  const reply = nodeEmit(copy, S,
+    { speaker: choice.speaker, art: choice.art, delay: choice.delay }, choice.reply)
   return [...reply, ...runSequence(copy, S)]
 }
 
@@ -186,12 +202,12 @@ export function beatDue (copy, S) {
 export function fireBeat (copy, S, ctx = {}) {
   const due = beatDue(copy, S)
   if (!due) return []
-  if (due.kind === 'again') return [text(copy.t('beats.again'))]
+  if (due.kind === 'again') return [beatLine(copy, 'again', null, copy.t('beats.again'))]
   const spec = copy.section(`beats.${due.id}`)
   S.beatsSeen = [...(S.beatsSeen || []), due.id]
   applyEffects(S, spec)
   const key = typeof spec === 'string' ? `beats.${due.id}` : `beats.${due.id}.text`
-  const out = [text(copy.t(key, ctx))]
+  const out = [beatLine(copy, due.id, spec, copy.t(key, ctx))]
   if (spec && typeof spec === 'object' && spec.choices) S.beat = due.id
   return out
 }
@@ -216,6 +232,6 @@ export function answerBeat (copy, S, cmd, ctx = {}) {
   const id = S.beat
   S.beat = null
   applyEffects(S, choice)
-  return [text(copy.t(`beats.${id}.choices.${token}.reply`,
+  return [beatLine(copy, id, choice, copy.t(`beats.${id}.choices.${token}.reply`,
     { ...ctx, coherence: S.coherence.toFixed(3) }))]
 }

@@ -13,7 +13,8 @@
 //
 //   TELEGRAM_BOT_TOKEN        required, from @BotFather
 //   TELEGRAM_BOT_TOKEN_LOCAL  used instead when MW_LOCAL=1
-//   MW_PACE_MS                gap between the messages of a scripted burst
+//   MW_PACE                   scales every delay copy.yaml sets; 0 turns
+//                             pacing off entirely
 //   MW_ALLOW                  optional comma-separated Telegram user ids
 //   MW_MODEL, MW_STATE_DIR    as everywhere else; see .env.example
 
@@ -165,7 +166,11 @@ export function createBot ({
   // Shared with the web client when both run in one process, so a tap here and
   // a turn there cannot interleave over the same saved game.
   queues = undefined,
-  paceMs = Number(process.env.MW_PACE_MS || 1400),
+  // How long each message waits is the copy editor's, set in copy.yaml under
+  // `pacing:` and stamped on every emission. This only scales it: 1 plays it
+  // as written, 2 plays it at half speed, 0 sends the burst as fast as
+  // Telegram will take it, which is what the tests want.
+  pace = process.env.MW_PACE,
   allow = (process.env.MW_ALLOW || '').split(',').map((s) => s.trim()).filter(Boolean),
   // Supplying botInfo skips the getMe call grammY would otherwise make before
   // it will handle an update, which is what lets a test drive the bot with
@@ -173,6 +178,13 @@ export function createBot ({
   botInfo = undefined,
 } = {}) {
   if (!token) throw new Error('createBot: a bot token is required')
+  // A blank or misspelt MW_PACE must not read as 0. Silently unpaced is the
+  // one wrong answer here: it looks exactly like the feature not existing,
+  // and nobody would think to check an environment variable for it.
+  const scale = Number.isFinite(Number(pace)) && pace !== '' && Number(pace) >= 0 ? Number(pace) : 1
+  if (pace !== undefined && Number(scale) !== Number(pace)) {
+    console.warn(`  MW_PACE='${pace}' is not a number; playing the copy's timing as written.`)
+  }
   const bot = new Bot(token, botInfo ? { botInfo } : undefined)
   const { game } = host
 
@@ -237,11 +249,14 @@ export function createBot ({
       const last = i === emissions.length - 1
       const reply_markup = last ? keyboardFor(choices) : undefined
 
-      // A scripted burst arrives a beat apart with a typing indicator, so it
-      // reads as someone talking rather than as four messages at once.
-      if (e.pace && i > 0) {
+      // A burst arrives a beat apart with a typing indicator, so it reads as
+      // someone talking rather than as four messages at once. Nothing waits
+      // before the FIRST message: that one is the answer to what the player
+      // just did, and pausing on it reads as the bot being slow.
+      const wait = i > 0 ? Math.round((Number(e.delay) || 0) * scale) : 0
+      if (wait > 0) {
         await action(chatId, 'typing')
-        await sleep(paceMs)
+        await sleep(wait)
       }
 
       if (e.kind === 'text') {

@@ -356,7 +356,7 @@ section('one game, both clients')
   const sent = []
   const made = createBot({
     token: TOKEN, host: h.host, artifacts: h.artifacts, queues: h.queues,
-    paceMs: 0, botInfo: BOT_INFO,
+    pace: 0, botInfo: BOT_INFO,
   })
   let messageId = 100
   made.bot.api.config.use(async (prev, method, payload) => {

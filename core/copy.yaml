@@ -18,6 +18,44 @@
 # Run `npm run copy-check` to confirm nothing is missing or misspelt.
 # =============================================================================
 
+# ---------------------------------------------------------------------------
+# Timing — how long each message waits before it arrives, in SECONDS.
+#
+# A turn can produce several messages. Without this they all land in the same
+# instant and a scene written as someone talking stops reading as someone
+# talking.
+#
+#   minimum   the floor under every message, the game's own included. Raise it
+#             and the whole game slows; this is the one that stops a burst
+#             arriving at once.
+#   scene     what a line in a sequence or a beat waits when it says nothing
+#             else. Dramatic timing, so it is longer than the minimum.
+#   max       a ceiling, so a typo cannot park the game.
+#   scenes    a default for one named sequence or beat, overriding `scene`.
+#
+# Any single line can override all of it with its own `delay:`, which is where
+# most of the feel is:
+#
+#   - text: |
+#       ...
+#     delay: 3            # a long pause before this line
+#   - text: |
+#       _ding_
+#     delay: 0.4          # and a short one before this
+#
+# The delay is the gap BEFORE a message. The first message of a turn never
+# waits — it is the answer to what the player just did.
+# ---------------------------------------------------------------------------
+pacing:
+  minimum: 0.6
+  scene: 1.4
+  max: 20
+
+  # Per-scene defaults. The tutorial is four long blocks of reading, so it
+  # wants longer than a line of dialogue does.
+  scenes:
+    tutorial: 3
+
 scenes:
 
   # {round} {coherence} {recovery} {recovering} {balance} {subscribed} {daily}

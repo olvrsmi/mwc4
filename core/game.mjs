@@ -27,6 +27,9 @@
 //   { kind: 'traces', title, caption, n, holdings, priced, clean, upto,
 //                     totalReadouts, target, interventionAt, foot, f }
 //
+// Each also carries `delay`, the milliseconds a client waits before showing it
+// - see pacing.mjs - and a scene's carry `pace: true` besides.
+//
 // `choices` are the tokens the player may send next, with labels - a renderer
 // makes buttons of them, or ignores them and lets the player type. Every
 // button is just a token the player could have typed.
@@ -36,6 +39,7 @@ import {
   money, signedMoney, pct, fmt3, mulberry,
 } from './pricing.mjs'
 import * as story from './story.mjs'
+import { withDelays } from './pacing.mjs'
 
 export const DEFAULT_RULES = {
   steps: 10,            // readouts per world: t0..t9, so nine steps
@@ -140,8 +144,13 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     }
   }
 
+  // Every emission leaves through here, which is why the timing is stamped
+  // here: one place decides it and both clients are handed the same answer,
+  // rather than each inventing its own and a game read back in the browser
+  // running to a different rhythm than the one played in the chat.
   const result = (S, emissions) =>
-    ({ emissions: emissions.flat().filter(Boolean), choices: choices(S), summary: summary(S) })
+    ({ emissions: withDelays(C, emissions.flat().filter(Boolean)),
+       choices: choices(S), summary: summary(S) })
 
   // -------------------------------------------------------------------------
   // Time, in steps

@@ -184,12 +184,20 @@ export function createWebServer ({
   const subjectOf = (req, name = COOKIE) =>
     readSubject(cookieFrom(req.headers.cookie, name), secret)
 
-  /** A game's standing, in the shape the page expects. */
-  const standing = (subject, rec) => ({
+  /**
+   * A game's standing, in the shape the page expects.
+   *
+   * `fresh` is for pacing: the log of a game that has just been created is the
+   * opening, which has never been played to anyone and should arrive a line at
+   * a time. Every other standing is a REPLAY - a reload, a resync, a login -
+   * and a transcript already read is redrawn at once.
+   */
+  const standing = (subject, rec, { fresh = false } = {}) => ({
     kind: subject.startsWith('tg') ? 'telegram' : 'anon',
     name: names.get(subject) || null,
     canLogin: loginPossible,
     botUsername,
+    fresh,
     log: rec.log,
     logLength: rec.log.length,
     choices: game.choices(rec.session),
@@ -213,8 +221,8 @@ export function createWebServer ({
   }
 
   async function openFor (res, subject, { setCookieToo = true } = {}) {
-    const { rec } = await sessions.open(subject)
-    return json(res, 200, standing(subject, rec),
+    const { rec, fresh } = await sessions.open(subject)
+    return json(res, 200, standing(subject, rec, { fresh }),
                 setCookieToo ? { 'Set-Cookie': cookieFor(subject) } : {})
   }
 
@@ -359,8 +367,8 @@ export function createWebServer ({
           // page cannot do anything with a 404, so it gets a whole standing and
           // redraws from it instead.
           if (!store.has(subject)) {
-            const { rec } = await sessions.open(subject)
-            return json(res, 200, { ...standing(subject, rec), reopened: true },
+            const { rec, fresh } = await sessions.open(subject)
+            return json(res, 200, { ...standing(subject, rec, { fresh }), reopened: true },
                         { 'Set-Cookie': cookieFor(subject) })
           }
           const r = await sessions.turn(subject, String(body.text ?? ''))
@@ -371,8 +379,8 @@ export function createWebServer ({
         if (url.pathname === '/api/reset') {
           // The game goes, the player stays: a logged-in player cannot change
           // who they are by starting again, and nobody can start again for them.
-          const { rec } = await sessions.reset(subject)
-          return json(res, 200, standing(subject, rec), { 'Set-Cookie': cookieFor(subject) })
+          const { rec, fresh } = await sessions.reset(subject)
+          return json(res, 200, standing(subject, rec, { fresh }), { 'Set-Cookie': cookieFor(subject) })
         }
         res.writeHead(404); return res.end('not found')
       }

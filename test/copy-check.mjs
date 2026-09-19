@@ -20,6 +20,7 @@ import { createCopy } from '../core/copy.mjs'
 import { createGame, HELP_SCENE } from '../core/game.mjs'
 import { createFakeModel } from '../core/fake-model.mjs'
 import * as story from '../core/story.mjs'
+import { DEFAULT_PACING } from '../core/pacing.mjs'
 import { loadSpecs } from '../host/specs.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -171,6 +172,56 @@ for (const [day, id] of Object.entries(source.beats?.schedule || {})) {
   if (source.beats?.[id] === undefined) problems.push(`beats.schedule day ${day} names '${id}', which is not written`)
 }
 
+// --- 2b. timing -------------------------------------------------------------
+//
+// Seconds, everywhere. A delay is as easy to mistype as a placeholder is, and
+// a node that waits an hour looks exactly like a game that has hung.
+const pacing = source.pacing
+const isSeconds = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0
+const maxDelay = isSeconds(pacing?.max) ? pacing.max : DEFAULT_PACING.max
+if (pacing !== undefined && (!pacing || typeof pacing !== 'object' || Array.isArray(pacing))) {
+  problems.push("pacing: should be a mapping of 'minimum', 'scene', 'max' and 'scenes'")
+} else if (pacing) {
+  for (const name of ['minimum', 'scene', 'max']) {
+    if (pacing[name] !== undefined && !isSeconds(pacing[name])) {
+      problems.push(`pacing.${name} is '${pacing[name]}'; it should be a number of seconds`)
+    }
+  }
+  if (isSeconds(pacing.minimum) && isSeconds(pacing.max) && pacing.minimum > pacing.max) {
+    problems.push(`pacing.minimum (${pacing.minimum}s) is longer than pacing.max (${pacing.max}s)`)
+  }
+  const named = new Set([...Object.keys(source.sequences || {}), ...Object.keys(source.beats || {}), 'again'])
+  for (const [id, v] of Object.entries(pacing.scenes || {})) {
+    if (!isSeconds(v)) problems.push(`pacing.scenes.${id} is '${v}'; it should be a number of seconds`)
+    else if (v > maxDelay) problems.push(`pacing.scenes.${id} is ${v}s, longer than pacing.max (${maxDelay}s)`)
+    if (!named.has(id)) problems.push(`pacing.scenes names '${id}', which is not a sequence or a beat`)
+  }
+}
+
+/** Every `delay:` a writer typed, wherever it is. */
+function checkDelay (where, value) {
+  if (value === undefined) return
+  if (!isSeconds(value)) problems.push(`${where}.delay is '${value}'; it should be a number of seconds`)
+  else if (value > maxDelay) problems.push(`${where}.delay is ${value}s, longer than pacing.max (${maxDelay}s)`)
+}
+for (const [id, nodes] of Object.entries(source.sequences || {})) {
+  if (!Array.isArray(nodes)) continue
+  nodes.forEach((node, i) => {
+    if (!node || typeof node !== 'object') return
+    checkDelay(`sequences.${id}[${i}]`, node.delay)
+    for (const [tok, c] of Object.entries(node.choices || {})) {
+      if (c && typeof c === 'object') checkDelay(`sequences.${id}[${i}].choices.${tok}`, c.delay)
+    }
+  })
+}
+for (const [id, spec] of Object.entries(source.beats || {})) {
+  if (id === 'schedule' || id === 'again' || !spec || typeof spec !== 'object') continue
+  checkDelay(`beats.${id}`, spec.delay)
+  for (const [tok, c] of Object.entries(spec.choices || {})) {
+    if (c && typeof c === 'object') checkDelay(`beats.${id}.choices.${tok}`, c.delay)
+  }
+}
+
 // --- 3. scenes the engine names --------------------------------------------
 for (const id of ['probation_passed', 'probation_failed']) {
   const nodes = lookup(`sequences.${id}`)
@@ -190,7 +241,7 @@ for (const id of copy.list('opening')) {
 }
 
 // --- 4. keys defined but never used ---------------------------------------
-const unusedSkip = ['worlds', 'holdings', 'vocabulary', 'sequences', 'beats', 'opening', 'chatter']
+const unusedSkip = ['worlds', 'holdings', 'vocabulary', 'sequences', 'beats', 'opening', 'chatter', 'pacing']
 const unused = copy.allKeys().filter((k) =>
   !referenced.has(k) && !unusedSkip.some((p) => k === p || k.startsWith(p + '.')) && !seen.has(k))
 

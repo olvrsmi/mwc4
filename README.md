@@ -45,6 +45,7 @@ mackenziewalk_04/
     story.mjs       scripted scenes and the beats of the probation week
     copy.mjs        every word comes from copy.yaml, rendered here
     pricing.mjs     Bloch readings to quotes, the prospectus, the sheet
+    pacing.mjs      how long each message waits, as the writer set it
     fake-model.mjs  invented physics, so everything runs without Python
     copy.yaml       every word the player reads
   model/           the physics: QDrive, spoken as JSON over stdio
@@ -296,8 +297,18 @@ Emissions are what a renderer shows, in order:
 where `kind` is `game`, `scene` or `beat` - a beat's choices arrive alongside
 the game's own and a renderer should set them apart, since a beat token
 shadows a game command of the same name. `summary` is the standing in
-numbers. Scene emissions also carry `pace: true`, for a client that wants to
-space a burst out; `help` reads a scene back unpaced.
+numbers.
+
+Every emission also carries `delay`, the milliseconds a client waits before
+showing it, and a scene's carry `pace: true` besides. The numbers are the
+writer's, set in seconds under `pacing:` in copy.yaml and resolved by
+`core/pacing.mjs` at the one seam every emission leaves through - so a game
+played in the chat and read back in the browser runs to the same rhythm. A
+minimum sits under every message, including the game's own; a scene's nodes
+wait longer, and any one of them may say how long. The gap is the one BEFORE a
+message and the first of a turn never waits. `help` reads a scene back without
+its dramatic timing, but still a message at a time. `MW_PACE` scales the lot
+for the Telegram client; `MW_PACE=0` turns it off.
 
 The model is anything with two methods:
 

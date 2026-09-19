@@ -8,6 +8,10 @@
 // localStorage and send it with every request; the server keeps that now, in a
 // cookie the page cannot read or edit, so what goes over the wire is only ever
 // what the player did.
+//
+// A turn arrives as several emissions and they are shown one at a time, each
+// waiting the milliseconds the game stamped on it. See core/pacing.mjs: the
+// numbers are the copy editor's, and this only does the waiting.
 
 const $ = (id) => document.getElementById(id)
 const log = $('log')
@@ -57,6 +61,67 @@ function render (e) {
   } else {
     div.textContent = `[${e.kind}]`
   }
+}
+
+// ---------------------------------------------------------------------------
+// Pacing
+//
+// A burst shown all at once is a wall of text, and a scene written as someone
+// talking stops reading as someone talking. The gaps are authored in
+// copy.yaml and travel on the emissions.
+//
+// A click anywhere in the log gives up the waiting and shows the rest at once.
+// The timing is there for a first reading, not to hold anyone in it - and a
+// player who has seen the opening before should not have to sit through it.
+// ---------------------------------------------------------------------------
+
+let skipping = false
+let cutShort = null
+
+function hurry () {
+  skipping = true
+  if (cutShort) cutShort()
+}
+log.addEventListener('click', hurry)
+
+/** A wait that a click can end early. */
+const pause = (ms) => new Promise((resolve) => {
+  const done = () => { clearTimeout(timer); cutShort = null; resolve() }
+  const timer = setTimeout(done, ms)
+  cutShort = done
+})
+
+/** Someone is still talking. Removed when they do. */
+function typing () {
+  const div = box()
+  div.className = 'msg typing'
+  div.title = 'click to skip the wait'
+  div.textContent = '\u2026'
+  return div
+}
+
+/**
+ * Emissions, one at a time.
+ *
+ * Nothing waits before the FIRST of a burst: that one is the answer to what
+ * the player just did, and pausing on it reads as the page being slow rather
+ * than as timing.
+ */
+async function renderBurst (emissions) {
+  skipping = false
+  const list = emissions || []
+  for (let i = 0; i < list.length; i++) {
+    const wait = i > 0 && !skipping ? Number(list[i].delay) || 0 : 0
+    if (wait > 0) {
+      const dots = typing()
+      scroll()
+      await pause(wait)
+      dots.remove()
+    }
+    render(list[i])
+    scroll()
+  }
+  skipping = false
 }
 
 function echo (line) {
@@ -137,7 +202,7 @@ function showAccount (r) {
     out.onclick = async () => {
       if (busy) return
       setBusy(true)
-      try { show(await post('/api/auth/logout')) } finally { setBusy(false) }
+      try { await show(await post('/api/auth/logout')) } finally { setBusy(false) }
     }
     accountEl.appendChild(out)
     return
@@ -167,7 +232,7 @@ function showChoice (choose) {
     b.onclick = async () => {
       if (busy) return
       setBusy(true)
-      try { show(await post('/api/auth/claim', { keep })) } catch (e) {
+      try { await show(await post('/api/auth/claim', { keep })) } catch (e) {
         box().textContent = `Could not finish signing in: ${e.message}`
       } finally { setBusy(false); scroll() }
     }
@@ -184,7 +249,7 @@ window.onTelegramAuth = async (user) => {
   try {
     const r = await post('/api/auth/telegram', { user })
     if (r.choose) return showChoice(r.choose)
-    show(r)
+    await show(r)
   } catch (e) {
     box().textContent = `Could not sign in: ${e.message}`
   } finally {
@@ -201,10 +266,18 @@ function setBusy (on) {
 
 const scroll = () => window.scrollTo(0, document.body.scrollHeight)
 
-/** A whole standing, drawn from nothing. */
-function show (r) {
+/**
+ * A whole standing, drawn from nothing.
+ *
+ * A game the server has just created is showing its opening for the first
+ * time, so it is played. Every other standing - a reload, a resync, a login -
+ * is a transcript that has already been read, and is redrawn at once.
+ */
+async function show (r) {
   log.innerHTML = ''
-  for (const e of r.log || []) render(e)
+  renderChoices([])
+  if (r.fresh) await renderBurst(r.log)
+  else for (const e of r.log || []) render(e)
   renderChoices(r.choices)
   renderStatus(r.summary)
   showAccount(r)
@@ -214,7 +287,7 @@ function show (r) {
 async function boot (reset = false) {
   setBusy(true)
   try {
-    show(await post(reset ? '/api/reset' : '/api/session'))
+    await show(await post(reset ? '/api/reset' : '/api/session'))
   } catch (e) {
     const div = box()
     div.textContent = `Could not reach the game: ${e.message}`
@@ -237,7 +310,7 @@ async function resync () {
   try {
     const r = await post('/api/session')
     if (mark(r) === seen) return showAccount(r)
-    show(r)
+    await show(r)
     scroll()
   } catch { /* offline, or the server is restarting: the next look will do */ }
 }
@@ -248,11 +321,12 @@ async function say (token, label) {
   if (busy) return
   setBusy(true)
   echo(label && label !== token ? `${label}` : token)
+  renderChoices([])
   try {
     const r = await post('/api/say', { text: token })
     // the game this browser was in is gone; what came back is a whole new one
-    if (r.reopened) return show(r)
-    for (const e of r.emissions) render(e)
+    if (r.reopened) return await show(r)
+    await renderBurst(r.emissions)
     renderChoices(r.choices)
     renderStatus(r.summary)
     seen = mark(r)

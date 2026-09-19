@@ -44,7 +44,12 @@ const sent = { text: 0, art: 0, charts: 0, bytes: 0 }
 const strip = (s) => String(s).replace(/\*\*/g, '')
 
 function show (r) {
-  for (const e of r.emissions) {
+  for (const [i, e] of r.emissions.entries()) {
+    // The gap a client waits before this one, so a copy editor can read the
+    // rhythm of a scene here rather than by playing it. Nothing waits before
+    // the first of a burst - see core/pacing.mjs.
+    const wait = i > 0 ? Number(e.delay) || 0 : 0
+    if (wait) console.log(`  [wait ] ${(wait / 1000).toFixed(1)}s`)
     if (e.kind === 'text') {
       sent.text += 1
       const lines = strip(e.text).split('\n')
