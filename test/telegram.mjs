@@ -317,8 +317,8 @@ section('two chats do not touch each other')
 section('a keyboard from four messages ago')
 {
   // Telegram never retires a keyboard. The game's tokens are heavily reused -
-  // `5` is a world, a stake, a holding and an exit point depending on where
-  // you are - so a stale tap is not inert, it is a different legal move.
+  // `5` is a world, a stake and a holding depending on where you are - so a
+  // stale tap is not inert, it is a different legal move.
   const h = await harness()
   await say(h.bot, 'hi')
   await say(h.bot, 'skip')
@@ -328,7 +328,7 @@ section('a keyboard from four messages ago')
   ok('the game is waiting for a stake', before.expect === 'stake')
 
   h.sent.length = 0
-  await tap(h.bot, '5')          // a plausible exit point, from an older keyboard
+  await tap(h.bot, '5')          // a plausible holding, from an older keyboard
   const after = h.game.summary((await h.host.store.load(sessionId('42'))).session)
   ok('a stale tap does not move the game', after.expect === 'stake' && after.balance === before.balance,
      `${before.expect}/${before.balance} -> ${after.expect}/${after.balance}`)
@@ -348,7 +348,7 @@ section('a keyboard from four messages ago')
   h.sent.length = 0
   await say(h.bot, '0')
   ok('typing is not held to the keyboard',
-     h.game.summary((await h.host.store.load(sessionId('42'))).session).expect === 'exit')
+     h.game.summary((await h.host.store.load(sessionId('42'))).session).expect === 'holding')
   await h.cleanup()
 }
 

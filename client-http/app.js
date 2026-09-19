@@ -81,7 +81,7 @@ function renderStatus (s) {
   let line = `Day ${s.day} · step ${s.dayStep}/${s.daySteps} · budget ${s.budget}G · balance ${s.balance}G · coherence ${s.coherence}`
   if (s.bonus) line += ` · pot ${s.bonus}G`
   if (s.world) line += ` · in ${s.world.name} at t${s.world.readout}`
-  if (s.position) line += ` · holding ${s.position.holding} (${s.position.stake}G) until t${s.position.exitAt}`
+  if (s.position) line += ` · holding ${s.position.holding} (${s.position.stake}G)`
   if (s.probation) line += ` · probation, attempt ${s.attempts}`
   statusEl.textContent = line
 }

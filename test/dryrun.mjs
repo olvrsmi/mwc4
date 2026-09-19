@@ -92,7 +92,6 @@ await say(S, 'o')
 await say(S, 'i')
 await say(S, '250')
 await say(S, '1')
-await say(S, '5')
 let held = 0
 while (S.run && held++ < 12) await say(S, held === 3 ? 'c' : 'h')
 await say(S, 'm')

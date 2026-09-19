@@ -62,8 +62,8 @@ scenes:
   # {stake} {holding}
   staking: "{stake} on **{holding}**. Making investment."
 
-  # {holding} {exit} {every}
-  position_open: "_Position open on **{holding}** until {exit}. Reports every {every}._"
+  # {holding} {last} {every}
+  position_open: "_Position open on **{holding}**. A reading every {every} — close whenever you like. The world runs to {last}._"
 
   # {target} {opened_at} {closed_at} {change} {multiplier} {stake} {returned}
   # {profit} {balance} {outcome} {coherence} {was_coherence} {flat} {drained}
@@ -79,18 +79,10 @@ scenes:
     Your coherence: {coherence} (was {was_coherence}){#if forced}
     _Closed early: EOD._{/if}{#if drained} {/if}
 
-  # {world} {target} {exit}
-  take_profit: |
-    Coupling to **{holding}**. Where do you take profit?
-
-    You are at {moment}. Choose any point from {first} to {last} — the position closes there and the round ends.
-
   # {balance}
   ask_stake: "How much do you stake? (1 – {balance})"
   # {last}
   ask_target: "Couple to which holding? (0 – {last})"
-  # {first} {last}
-  ask_exit: "Pick a point from {first} to {last}."
   ask_units: How many upgrades?
 
   left: You leave before anything is committed.
@@ -127,15 +119,6 @@ scenes:
     **The week closes.** Seven days came to {total}.
     {#if paid}A personal bonus of {bonus} has been paid. Your pot stands at {pot}. It cannot be invested.{:else}No bonus this week.{/if}
 
-  # {total} {attempt} {again} {coherence} — the probation week ended in profit
-  # {exit} {remaining} {reachable}
-  exit_past_bell: |
-    **{exit} falls after the bell.**
-
-    The day ends in {remaining} and every position closes where it stands, so you would be sold out early — {reachable} is the last point you can reach in full.
-
-    Hold anyway, or choose again?
-
   # {worlds} {skipped} {recharge}
   welcome: |
     **OFFICE 4B, 6 MACKENZIE WALK**
@@ -150,7 +133,7 @@ scenes:
     
     This means you can choose one entity in one market to invest in. Pick wisely. Spend some time observing the trajectories before making your decision, but don't wait too long. If the value of the entity is up when you exit, you make money, if it's down you lose it. Simple as that.
     
-    When you invest, your investment-bit is coupled with the entity you choose and you have to wait for your exit point before you can make further calls.
+    When you invest, your investment-bit is coupled with the entity you choose, and it stays coupled until you close the position. Watch it step by step and pull out whenever you like — nothing is committed for you.
 
     Remember your investment bit will come back changed and you may need to wait for it to clean up ({recharge}).
 
@@ -188,22 +171,15 @@ buttons:
   leave: Leave
   marketplace: Marketplace
   status: Status
-  # new in 04: a position is stepped by hand and may be closed before its exit point
+  # new in 04: a position is stepped by hand and closed whenever the player says
   hold: Hold
   close: Close position
   buy: Buy
-  hold_anyway: Hold anyway
-  choose_again: Choose again
   all_stake: "All {amount}"
   stake: "{amount}"
   # {index} {world} {opportunities}
   world: "{index}. {world} — {opportunities} opportunit{opportunities|s:y:ies}"
-  # {readout}
-  exit_point: "{moment}"
-  exit_end: "{moment} (the end)"
   qubit: "{holding}"
-  # {world} {until}
-  locked_toast: "Your money is committed to {world} until {until}."
 
 # The five bands a world's complexity is described by, easiest first.
 # Thresholds live in code; add or rename words here and the bands re-space.

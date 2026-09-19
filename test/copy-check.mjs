@@ -46,10 +46,10 @@ const walk = async () => {
 }
 const say = async (...tokens) => { for (const t of tokens) await game.handle(S, t) }
 await walk()
-await say('1', 'o', 'i', '250', '1', '4', 'h', 'h', 'h')          // watched, then held to the exit
-await say('1', 'i', '100', '0', '9', 'h', 'c')                     // closed early
+await say('1', 'o', 'i', '250', '1', ...Array(8).fill('h'))        // watched, then held to the end of the world
+await say('1', 'i', '100', '0', 'h', 'c')                          // closed by hand
 S.dayStep = 26
-await say('1', 'i', '100', '0', '5', 'y', 'h')                     // past the bell, forced closed, the day ends
+await say('1', 'i', '100', '0', 'h')                               // the bell closes it, and the day
 await say('1', 'o', 'l')                                           // a nudge or two
 await say('m', 'b', '10', 'l')                                     // the workshop
 S.week = [1, 1, 1, 1, 1, 1]; S.dayStep = 26; S.balance = S.budget + 500; S.investedToday = 1

@@ -60,6 +60,9 @@ export const DEFAULT_RULES = {
 /** The scene `help` reads out when copy.yaml names none as `help_scene:`. */
 export const HELP_SCENE = 'voice'
 
+/** States a session can only be in because it was saved by an older build. */
+const RETIRED_EXIT = new Set(['exit', 'confirm_exit'])
+
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 const norm = (v) => Math.hypot(v[0], v[1], v[2])
 const text = (t) => ({ kind: 'text', text: t })
@@ -131,7 +134,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       world: S.world ? { id: S.world.info.id, name: S.world.name, n: S.world.info.n,
                          readout: k, readouts: S.world.readouts } : null,
       position: S.run ? { holding: C.holding(S.run.target, S.run.holdings), target: S.run.target,
-                          stake: S.run.stake, investAt: S.run.investAt, exitAt: S.run.exitAt } : null,
+                          stake: S.run.stake, investAt: S.run.investAt } : null,
       inScene: story.inSequence(S),
       pendingBeat: S.beat,
     }
@@ -489,12 +492,12 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   /** The stake is placed and the position opens. The coupling begins next step. */
   function openPosition (S) {
     const k = S.world.readings.length - 1
-    const { stake, target: q, exitAt } = S.pending
+    const { stake, target: q } = S.pending
     S.pending = null
     S.balance -= stake
     S.investedToday += 1
     S.run = {
-      investAt: k, target: q, stake, exitAt,
+      investAt: k, target: q, stake,
       entered: false,            // the apparatus joins the circuit on the first held step
       apparatus: null,           // what it reads as, after each held step
       holdings: S.world.holdings,
@@ -507,7 +510,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     return [
       text(C.t('scenes.staking', { stake: money(stake), target: q, holding: C.holding(q, S.world.holdings) })),
       text(C.t('scenes.position_open', { target: q, holding: C.holding(q, S.world.holdings),
-                                         exit: C.moment(exitAt), every: describeSteps(1) })),
+                                         last: C.moment(S.world.readouts - 1), every: describeSteps(1) })),
       openPanel(S),
     ]
   }
@@ -534,14 +537,13 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
 
     const k = S.world.readings.length - 1
     const out = [readoutPanel(S)]
-    if (k >= r.exitAt) { r.exitAt = k; return [...out, ...closeOut(S)] }
-    if (bellDue(S)) { r.exitAt = k; r.forced = true; return [...out, ...closeOut(S)] }
+    if (k >= S.world.readouts - 1) return [...out, ...closeOut(S)]
+    if (bellDue(S)) { r.forced = true; return [...out, ...closeOut(S)] }
     return out
   }
 
-  /** Close where it stands, before the chosen exit. */
+  /** Close where it stands, which is the only place a position ever closes. */
   function closePosition (S) {
-    S.run.exitAt = S.world.readings.length - 1
     return closeOut(S)
   }
 
@@ -561,8 +563,9 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   function settle (S) {
     const r = S.run
     const rows = S.world.readings
+    const exitAt = rows.length - 1
     const opened = rows[r.investAt][r.target]
-    const closed = rows[r.exitAt][r.target]
+    const closed = rows[exitAt][r.target]
     // the move, said as the one number the payout is a function of
     const f0 = valueFactor(opened, R.price)
     const f1 = valueFactor(closed, R.price)
@@ -584,7 +587,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       target: r.target, holding: C.holding(r.target, r.holdings),
       opened_at: money(quote(r.base, opened, R.price)), closed_at: money(quote(r.base, closed, R.price)),
       opened_reading: f0.toFixed(4), closed_reading: f1.toFixed(4),
-      exit: C.moment(r.exitAt),
+      exit: C.moment(exitAt),
       change: `${df >= 0 ? '+' : ''}${df.toFixed(4)}`, change_raw: df,
       multiplier: `${mult >= 0 ? '+' : ''}${mult.toFixed(4)}`, multiplier_raw: mult,
       stake: money(r.stake), stake_raw: r.stake,
@@ -617,6 +620,10 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   /** The world list is not saved with a session; fetch it when it is missing. */
   async function hydrate (S) {
     if (!S.allWorlds) S.allWorlds = await model.worlds()
+    // A game saved while the exit question still existed. Nothing was taken -
+    // the stake leaves the balance only when the position opens - so it picks
+    // up at the invest prompt, with the world and its readings as they were.
+    if (RETIRED_EXIT.has(S.expect)) { S.pending = null; S.expect = 'invest' }
     return S
   }
 
@@ -739,47 +746,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
           return result(S, [text(C.t('scenes.ask_target', { last: n - 1 }))])
         }
         S.pending.target = q
-        S.expect = 'exit'
-        const k = S.world.readings.length - 1
-        const last = S.world.readouts - 1
-        return result(S, [text(C.t('scenes.take_profit', {
-          world: S.world.name, target: q, holding: C.holding(q, S.world.holdings),
-          moment: C.moment(k), progress: k, first: C.moment(k + 1), last: C.moment(last),
-        }))])
-      }
-
-      case 'exit': {
-        const k = S.world.readings.length - 1
-        const last = S.world.readouts - 1
-        const e = num(cmd)
-        if (e === null || !Number.isInteger(e) || e <= k || e > last) {
-          return result(S, [text(C.t('scenes.ask_exit', { first: C.moment(k + 1), last: C.moment(last) }))])
-        }
-        // The bell closes every position, so an exit beyond it would be cut
-        // short. Say so before the money is committed, and offer a way back.
-        const left = stepsLeft(S)
-        if (e - k > left && !S.pending.confirmed) {
-          S.pending.exitAt = e
-          S.expect = 'confirm_exit'
-          return result(S, [text(C.t('scenes.exit_past_bell', {
-            exit: C.moment(e), remaining: describeSteps(left), reachable: C.moment(k + left),
-          }))])
-        }
-        S.pending.exitAt = e
         return result(S, openPosition(S))
-      }
-
-      case 'confirm_exit': {
-        if (cmd === 'y' || cmd === 'yes') {
-          S.pending.confirmed = true
-          S.expect = 'exit'
-          return handle(S, String(S.pending.exitAt))
-        }
-        S.pending.confirmed = false
-        S.expect = 'exit'
-        const k = S.world.readings.length - 1
-        return result(S, [text(C.t('scenes.ask_exit',
-          { first: C.moment(k + 1), last: C.moment(S.world.readouts - 1) }))])
       }
 
       case 'holding': {
@@ -833,7 +800,10 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     if (scene.length) return scene.map((c) => ({ ...c, kind: 'scene' }))
     const out = story.beatChoices(C, S).map((c) => ({ ...c, kind: 'beat' }))
     const push = (token, label) => out.push({ token, label, kind: 'game' })
-    switch (S.expect) {
+    // `choices` is read before a resumed game has taken a turn, so it answers
+    // for a retired state too rather than offering nothing; `hydrate` writes
+    // the change into the session on that turn.
+    switch (RETIRED_EXIT.has(S.expect) ? 'invest' : S.expect) {
       case 'world':
         ;(S.worlds || []).forEach((w, i) =>
           push(`${i + 1}`, C.t('buttons.world', { index: i + 1, world: w.name, opportunities: w.info.n })))
@@ -856,21 +826,6 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
         for (let q = 0; q < (S.world?.info?.n || 0); q++) {
           push(`${q}`, C.t('buttons.qubit', { index: q, holding: C.holding(q, S.world.holdings) }))
         }
-        break
-      case 'exit': {
-        // guarded like the rest: a turn that threw part-way can leave `expect`
-        // here with no world, and this is read while reporting that failure
-        if (!S.world) break
-        const k = S.world.readings.length - 1
-        const last = S.world.readouts - 1
-        for (let r = k + 1; r <= last; r++) {
-          push(`${r}`, C.t(r === last ? 'buttons.exit_end' : 'buttons.exit_point', { readout: r, moment: C.moment(r) }))
-        }
-        break
-      }
-      case 'confirm_exit':
-        push('y', C.t('buttons.hold_anyway'))
-        push('n', C.t('buttons.choose_again'))
         break
       case 'holding':
         push('h', C.t('buttons.hold'))

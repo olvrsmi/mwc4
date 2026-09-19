@@ -164,8 +164,10 @@ closes with the books:
 | the seventh day, on probation | a positive week passes; a failed one starts the week again |
 | the seventh day, afterwards | a positive week pays 100G into a personal pot that cannot be staked |
 
-A position may be closed early at any step. One chosen to end after the bell
-is queried first, and offered a way back.
+A position is opened with no end date on it: it runs a step at a time, for as
+long as the player keeps holding, and closes when they say so. Left open, it
+closes itself at the world's last readout, or where it stands when the bell
+rings.
 
 ## Playing
 
@@ -176,7 +178,7 @@ so free text keeps working.
 |---|---|
 | `1` `2` `3` | enter one of the three worlds on offer · `m` the workshop |
 | `i` `o` `l` | invest, observe one more step, or leave (only at t0) |
-| a number, three times | the stake, the holding, the exit point |
+| a number, twice | the stake, then the holding |
 | `h` `c` | hold one more step, or close where it stands |
 | `b` `l` | buy upgrades, or leave the workshop |
 | `help` `state` | the rules read out again, and your standing; either works mid-position |

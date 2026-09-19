@@ -186,11 +186,10 @@ section('a position: stake, hold, settle')
   r = await game.handle(S, '250.7')
   ok('a fractional stake is rounded to whole G', S.pending.stake === 251 && S.expect === 'target')
   ok('targets are offered by ticker', r.choices.length === S.world.info.n && r.choices[0].label === S.world.holdings[0])
-  r = await game.handle(S, '1')
-  ok('then an exit point from t2 to t9', S.expect === 'exit' && r.choices[0].token === '2' && r.choices.at(-1).token === '9' && has(r, /take profit/))
   const before = model.calls.length
-  r = await game.handle(S, '4')
-  ok('the position opens', S.expect === 'holding' && S.run && S.run.investAt === 1 && S.run.target === 1 && S.run.exitAt === 4 && S.run.stake === 251)
+  r = await game.handle(S, '1')
+  ok('naming the holding is the last of it - nothing is asked about how long',
+     S.expect === 'holding' && S.run && S.run.investAt === 1 && S.run.target === 1 && S.run.stake === 251)
   ok('the stake leaves the balance', S.balance === 1000 - 251 && S.investedToday === 1)
   ok('opening itself calls no model', model.calls.length === before)
   ok('and says so, with the chart marked',
@@ -209,11 +208,13 @@ section('a position: stake, hold, settle')
   ok('the apparatus enters only once', model.calls.at(-2).enter === false)
   ok('holding does not regenerate', S.coherence === c0)
   r = await game.handle(S, 'h')
-  ok('reaching the exit settles the position', S.run === null && has(r, /Returns/) && S.expect === 'world')
+  ok('a third held step is just another reading - nothing was due', S.run && S.expect === 'holding')
+  r = await game.handle(S, 'c')
+  ok('closing settles the position', S.run === null && has(r, /Returns/) && S.expect === 'world')
   ok('the balance stays a whole number', Number.isInteger(S.balance))
   ok('the qubit comes back changed', S.coherence < 1 && S.coherence > 0)
   ok('the next round is offered underneath', has(r, /Investment Options/) && S.worlds.length === 3)
-  ok('four steps of the day have passed', S.dayStep === 4)
+  ok('four steps of the day have passed, and closing is not one', S.dayStep === 4)
   ok('an unknown word mid-position is nudged, not swallowed', (async () => true)())
 }
 
@@ -222,14 +223,14 @@ section('closing early')
 {
   const { game, S } = mk(46)
   await skipOpening(game, S)
-  for (const t of ['1', 'i', '100', '0', '9', 'h', 'h']) await game.handle(S, t)
+  for (const t of ['1', 'i', '100', '0', 'h', 'h']) await game.handle(S, t)
   const r = await game.handle(S, 'c')
   ok('closing early settles where it stands', S.run === null && has(r, /Returns/) && S.expect === 'world')
   ok('and the day moved only for the held steps', S.dayStep === 2)
 
   const { game: g2, S: T } = mk(47)
   await skipOpening(g2, T)
-  for (const t of ['1', 'i', '100', '0', '9']) await g2.handle(T, t)
+  for (const t of ['1', 'i', '100', '0']) await g2.handle(T, t)
   const c = T.coherence
   const r2 = await g2.handle(T, 'c')
   ok('closing before any held step returns the stake', T.balance === 1000 && T.coherence === c && has(r2, /profit 0G/))
@@ -243,13 +244,7 @@ section('the bell')
   await game.handle(S, '1')
   S.dayStep = 25                                   // two steps left today
   for (const t of ['i', '100', '0']) await game.handle(S, t)
-  const warn = await game.handle(S, '5')
-  ok('an exit past the bell is queried first', S.expect === 'confirm_exit' && has(warn, /after the bell/) && has(warn, /t2 is the last point/))
-  await game.handle(S, 'n')
-  ok('choose again returns to the exit question', S.expect === 'exit')
-  await game.handle(S, '5')
-  await game.handle(S, 'y')
-  ok('hold anyway opens the position', S.expect === 'holding' && S.run.exitAt === 5)
+  ok('the position opens with no date on it', S.expect === 'holding' && !('exitAt' in S.run))
   await game.handle(S, 'h')
   const bell = await game.handle(S, 'h')
   ok('the bell closes the position where it stands', S.run === null && has(bell, /Closed early: EOD/))
@@ -264,8 +259,7 @@ section('the bell')
   await g2.handle(T, '1')
   T.dayStep = 20
   for (const t of ['i', '100', '0']) await g2.handle(T, t)
-  await g2.handle(T, '5')
-  ok('an exit within reach is not queried', T.expect === 'holding')
+  ok('a day with room left opens the same way', T.expect === 'holding')
 
   const { game: g3, S: U } = mk(50)
   await skipOpening(g3, U)
@@ -508,7 +502,7 @@ section('choices say where they came from')
   // read in error paths, so it must not be the thing that throws
   const { game: g4, S: E } = mk(124)
   await skipOpening(g4, E)
-  E.expect = 'exit'
+  E.expect = 'target'
   E.world = null
   let threw = null
   try { g4.choices(E) } catch (e) { threw = e }
