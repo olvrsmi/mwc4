@@ -351,6 +351,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       kind: 'traces',
       n: info.n,
       holdings: S.world.holdings,
+      world: S.world.name,
       upto,
       totalReadouts: S.world.readouts,
       target,

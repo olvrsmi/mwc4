@@ -11,6 +11,12 @@ The variable-weight `.ttf` files, unmodified. Vendored rather than installed on
 the host, because a box without them would silently fall back to whatever it did
 have and draw a different chart than the one designed here.
 
+`RobotoMono-ExtraLight.ttf`, `RobotoMono-Regular.ttf` and `RobotoMono-Bold.ttf`
+are static instances cut from `RobotoMono[wght].ttf` at wght 200, 400 and 700
+with `fontTools.varLib.instancer` — a modification, made because canvas cannot
+interpolate a variable font for itself and would otherwise draw every weight as
+Regular. The OFL permits it; the reserved font name is untouched.
+
 ## QDrive and qdrive-api
 
 `model/engine.py` drives Moth's QDrive through the qdrive-api engine. Both are
