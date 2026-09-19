@@ -89,11 +89,12 @@ function frame (height, title, draw) {
 /**
  * Every holding's quote on one shared logarithmic axis: comparable, and a 2%
  * move is the same height wherever it happens. `priced` is the quote series;
- * `z` is the raw reading, a linear fallback for a caller without prices.
+ * `f` is the value factor behind it, a linear fallback for a caller without
+ * prices.
  */
-export function renderTraces ({ n, z, priced, clean, upto, totalReadouts, target = null,
+export function renderTraces ({ n, f, priced, clean, upto, totalReadouts, target = null,
                                 interventionAt = null, holdings, title, foot = {} }) {
-  const series = priced || z
+  const series = priced || f
   const log = Boolean(priced)
   const name = (q) => holdings?.[q] ?? `E${q}`
   return frame(SQUARE, title, (ctx, W) => {

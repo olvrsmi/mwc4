@@ -9,7 +9,10 @@ import { readFile, writeFile, rename, copyFile, mkdir, readdir, rm } from 'node:
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-export const STORE_VERSION = 4
+// 5: a reading is a Bloch vector rather than a single <Z>, so S.world.readings
+// has a shape no earlier save has. A version behind is dropped, not migrated -
+// a half-played world cannot be re-read at three axes after the fact.
+export const STORE_VERSION = 5
 
 export function createStore (dir, { keepLog = 300, keepLive = Number(process.env.MW_CACHE || 500) } = {}) {
   const fileFor = (id) => join(dir, `${id}.json`)

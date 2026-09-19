@@ -20,8 +20,8 @@ The game is turn-based, so the world is stepped once per request and the
 circuit travels back and forth as QASM3 text in the `circuit` field:
 
     step   apply the world's targets once to the circuit given (or to the
-           identity on n qubits when none is), read every qubit's <Z>, and
-           return the circuit that resulted.
+           identity on n qubits when none is), read every qubit's Bloch
+           vector, and return the circuit that resulted.
              enter   {direction, coherence}: widen the circuit first so the
                      player's qubit joins it - see WHAT THE PLAYER'S QUBIT IS
              couple  a holding index: also drive <Z_apparatus Z_holding> to 1
@@ -39,6 +39,37 @@ WHAT A WORLD IS
 A *specification*: a set of target expectation values.  A step applies all of
 them to the circuit the last step produced.  It would run forever if you let
 it; the game decides how many steps a round is.
+
+WHAT A READING IS
+-----------------
+All three single-qubit components, [<X>, <Y>, <Z>] per holding, and not <Z>
+alone.  `tomography: 1` already measured all three - it always did - so the
+other two axes cost nothing and were simply being thrown away.
+
+What the price makes of them is core/pricing.mjs's business, not this file's,
+but the shape of it has to be agreed in both places: growth (<Z>) and
+profitability (<X>) count for a holding, financial risk (<Y>) against, as the
+weighted sum
+
+    f = (w . r) / |w|,    w = (+1, -1, +1) over (<X>, <Y>, <Z>)
+
+Dividing by |w| keeps f in [-1, 1], which is the range the old single-axis
+reading had, so sigma means the same thing either side of the change.  The
+only thing this file needs f for is `character` - the volatility a world is
+advertised with has to be measured on the quantity the price actually moves
+on, or the prospectus describes a world nobody plays.
+
+Two things follow from reading a Bloch vector rather than one axis, and both
+are worth knowing before tuning a world:
+
+  * f <= |r| <= 1. The value factor cannot exceed the Bloch length, and a
+    qubit's Bloch length shortens as it entangles. A densely wired world is
+    flat in the marginals *because* it is rich in correlations: the
+    information has moved into the two-qubit sector, where nothing here looks.
+  * the direction of the price is now the direction of the physics. The old
+    quote was exp(-sigma * <Z>) - inverted, because a world starts at <Z> = +1
+    and decoheres, so -<Z> was the direction that rose. f is not inverted, and
+    re-scores every world accordingly.
 
 WHAT THE PLAYER'S QUBIT IS
 --------------------------
@@ -92,8 +123,33 @@ STATS_CACHE = os.path.join(SPEC_DIR, '_stats_cache.json')
 STEPS = int(os.environ.get('MW_STEPS', '10'))
 
 
+# The weights the price reads a Bloch vector with, over (<X>, <Y>, <Z>), and
+# the one thing in this file duplicated from core/pricing.mjs (DEFAULT_PRICE
+# .weights). It is here so `character` can measure volatility on the quantity
+# the quote moves on; change it in one place and the other is wrong, which is
+# the price of the engine speaking JSON rather than importing anything.
+WEIGHTS = (1.0, -1.0, 1.0)
+
+
 class Unusable(Exception):
     """A world that cannot be played, said in a way the server can show."""
+
+
+def clamp(v, lo, hi):
+    return lo if v < lo else (hi if v > hi else v)
+
+
+def value_factor(reading, weights=WEIGHTS):
+    """The scalar the quote is made of: (w . r)/|w|, in [-1, 1].
+
+    A straight port of valueFactor() in core/pricing.mjs. The listing price
+    cancels out of every return, so this - and sigma - is the whole of how far
+    a holding moves.
+    """
+    wx, wy, wz = weights
+    x, y, z = reading
+    norm = math.sqrt(wx * wx + wy * wy + wz * wz) or 1.0
+    return clamp((wx * x + wy * y + wz * z) / norm, -1.0, 1.0)
 
 
 # ----------------------------------------------------------------------------
@@ -345,10 +401,6 @@ def cuts_for(spec, steps):
 # The apparatus
 # ----------------------------------------------------------------------------
 
-def clamp(v, lo, hi):
-    return lo if v < lo else (hi if v > hi else v)
-
-
 def unit(direction):
     d = [float(x) for x in (direction or [0.0, 0.0, 1.0])]
     norm = math.sqrt(sum(x * x for x in d))
@@ -366,7 +418,8 @@ def enter(circuit, n, direction, coherence):
     old engine had genuine no-signalling here and the game leans on it, because
     a world's volatility is quoted in the prospectus before anyone has scouted
     it.  Keeping the apparatus out until the moment of investment gives that
-    back: up to invest_at, the run is the world alone.
+    back: up to AND INCLUDING invest_at, the run is the world alone, so the
+    reading the stake was placed at is one nobody had touched.
 
     Takes the QASM3 of the n-qubit circuit so far (or None, when investing at
     the very first step) and returns QASM3 for an (n + 2)-qubit one: the same
@@ -396,11 +449,12 @@ def enter(circuit, n, direction, coherence):
 # ----------------------------------------------------------------------------
 
 def run(spec_id, steps, direction, coherence, invest_at=None, target=None):
-    """Step the world, reading every qubit's <Z> after each step.
+    """Step the world, reading every qubit's Bloch vector after each step.
 
-    Coupling is *persistent*: from invest_at onward the ZZ target goes on with
-    the rest, every step, for as long as the position is held. That is what
-    drains the apparatus - one coupling would cost almost nothing.
+    Coupling is *persistent*: from the step after invest_at onward the ZZ
+    target goes on with the rest, every step, for as long as the position is
+    held. That is what drains the apparatus - one coupling would cost almost
+    nothing.
     """
     spec = load(spec_id)
     n = spec['n']
@@ -410,20 +464,24 @@ def run(spec_id, steps, direction, coherence, invest_at=None, target=None):
 
     circuit = None          # step 0 starts from the identity on n qubits
     coherence = clamp(float(coherence), 0.0, 1.0)
-    z = []
+    r = []
     apparatus = [x * coherence for x in unit(direction)]
 
     for k in range(steps):
         targets = list(spec['targets'])
-        # Two separate moments, and they used to be one. The apparatus JOINS the
-        # circuit at invest_at - an unentangled qubit, which changes nothing
-        # anyone can read. It COUPLES from the step after, so the reading the
-        # player bought at is the reading they were shown: coupling on the same
-        # step moved the quote they had just agreed to.
-        joined = invest_at is not None and k >= int(invest_at)
-        if joined and k == int(invest_at):
+        # The apparatus joins the circuit and couples on the SAME step, and that
+        # step is the one after invest_at - so the reading the stake was placed
+        # at is one nobody had touched. This used to widen a step earlier, on
+        # the theory that an uncoupled qubit changes nothing anyone can read.
+        # It does: QDrive fits its parameters against the whole state, so an
+        # apparatus merely present is worth 0.78 of expectation value on the
+        # entry step of spec_n3_01. game.mjs hold() passes `enter` and `couple`
+        # to one model.step call for exactly this reason, and op_step below has
+        # always done it that way; this is the batch path catching up with it.
+        joined = invest_at is not None and k > int(invest_at)
+        if joined and k == int(invest_at) + 1:
             circuit = enter(circuit, n, direction, coherence)
-        if invest_at is not None and k > int(invest_at):
+        if joined:
             targets.append({'expvals': {'ZZ': 1.0}, 'qubits': [ex, int(target)]})
 
         params = {'seed': spec['seed'], 'tomography': 1, 'targets': targets}
@@ -434,10 +492,11 @@ def run(spec_id, steps, direction, coherence, invest_at=None, target=None):
 
         tomography = result['output']['tomography']
         # The estimator is shot-based, so a reading can land just outside [-1, 1]
-        # - about 0.03 at 1024 shots. The game treats <Z> as bounded (the
-        # multiplier is dz/2), so clamp rather than let a 1.04 pay out over par.
-        z.append([clamp(float(tomography[str(q)]['Z'] or 0.0), -1.0, 1.0)
-                  for q in range(n)])
+        # - about 0.03 at 1024 shots. The price treats a reading as a point in
+        # the Bloch ball, so clamp each component rather than let a 1.04 quote
+        # above what the physics allows.
+        r.append([[clamp(float(tomography[str(q)][w] or 0.0), -1.0, 1.0)
+                   for w in 'XYZ'] for q in range(n)])
         if joined:
             apparatus = [clamp(float(tomography[str(ex)][w] or 0.0), -1.0, 1.0)
                          for w in 'XYZ']
@@ -447,7 +506,7 @@ def run(spec_id, steps, direction, coherence, invest_at=None, target=None):
         'cuts': cuts_for(spec, steps),
         'n_layers': len(real_targets(spec)) * steps,
         'layers': layers_of(spec, steps),
-        'z': z,
+        'r': r,
         'apparatus': apparatus,
         'coherence': round(math.sqrt(sum(x * x for x in apparatus)), 6),
     }
@@ -461,12 +520,17 @@ def character(spec_id, steps):
     in the circuit at all (see `enter`). The trace is a property of the world
     alone, so it need only ever be computed once, and is cached to disk.
 
-    volatility is the mean over holdings of how far <Z> ranges across the run,
-    in [0, 2]. A world whose holdings sit still has nothing to bet on.
+    volatility is the mean over holdings of how far the VALUE FACTOR ranges
+    across the run, in [0, 2]. Not <Z>: f is what the quote moves on, and on a
+    densely wired world the two part company badly - the marginals go flat
+    while the correlations do all the work. A world whose holdings sit still
+    has nothing to bet on, and the sheet has to say so about the right thing.
     """
-    r = run(spec_id, steps, [0.0, 0.0, 1.0], 1.0)
-    cols = list(zip(*r['z']))
-    ranges = [max(c) - min(c) for c in cols]
+    out = run(spec_id, steps, [0.0, 0.0, 1.0], 1.0)
+    ranges = []
+    for col in zip(*out['r']):           # one holding's readings, step by step
+        fs = [value_factor(reading) for reading in col]
+        ranges.append(max(fs) - min(fs))
     return {
         'volatility': round(sum(ranges) / len(ranges), 4) if ranges else 0.0,
         'per_qubit_range': [round(x, 4) for x in ranges],
@@ -534,7 +598,7 @@ def op_scout(req):
             req.get('direction', [0.0, 0.0, 1.0]),
             float(req.get('coherence', 1.0)))
     return {'info': r['info'], 'cuts': r['cuts'], 'n_layers': r['n_layers'],
-            'z': r['z'], 'layers': r['layers']}
+            'r': r['r'], 'layers': r['layers']}
 
 
 def _qubits_declared(circuit):
@@ -548,7 +612,8 @@ def op_step(req):
 
     `enter` widens the circuit so the player's qubit joins it, before the step.
     `couple` adds the ZZ target between the apparatus and that holding, for
-    this step. The reading returned is the state after the step.
+    this step. The reading returned is [<X>, <Y>, <Z>] per holding, after the
+    step.
     """
     spec = load(req['world'])
     n = spec['n']
@@ -579,11 +644,14 @@ def op_step(req):
     result = engine().run(params, initial_circuit=circuit)
     out = result['files']['circuit'][0]
     tomography = result['output']['tomography']
-    z = [clamp(float(tomography[str(q)]['Z'] or 0.0), -1.0, 1.0) for q in range(n)]
-    apparatus = None
-    if str(n) in tomography:
-        apparatus = [clamp(float(tomography[str(n)][w] or 0.0), -1.0, 1.0) for w in 'XYZ']
-    return {'circuit': out.decode('utf-8'), 'z': z, 'apparatus': apparatus}
+
+    def read(q):
+        """One qubit's Bloch vector, clamped into the ball. See run()."""
+        return [clamp(float(tomography[str(q)][w] or 0.0), -1.0, 1.0) for w in 'XYZ']
+
+    r = [read(q) for q in range(n)]
+    apparatus = read(n) if str(n) in tomography else None
+    return {'circuit': out.decode('utf-8'), 'r': r, 'apparatus': apparatus}
 
 
 OPS = {'worlds': op_worlds, 'scout': op_scout, 'step': op_step}

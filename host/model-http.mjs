@@ -2,7 +2,8 @@
 //
 // The same steps the notebook takes: submit a job that applies the world's
 // targets to the current circuit (chained in by asset id as `initial_circuit`),
-// poll until it completes, read each qubit's <Z> from the tomography. The
+// poll until it completes, read each qubit's Bloch vector from the tomography
+// (all three components: `tomography: 1` returns X, Y and Z together). The
 // circuit never comes down the wire between ordinary steps - the handle the
 // game carries is the output asset's id.
 //
@@ -131,21 +132,22 @@ export function createHttpModel ({
       const res = status.result || {}
       const tomo = res.tomography || res.output?.tomography
       if (!tomo) throw new Error(`job ${job.job_id}: no tomography in result`)
-      const read = (q, w) => clamp(Number(tomo[String(q)]?.[w] ?? 0), -1, 1)
-      const z = Array.from({ length: n }, (_, q) => read(q, 'Z'))
-      const apparatus = tomo[String(n)] ? ['X', 'Y', 'Z'].map((w) => read(n, w)) : null
+      const component = (q, w) => clamp(Number(tomo[String(q)]?.[w] ?? 0), -1, 1)
+      const read = (q) => ['X', 'Y', 'Z'].map((w) => component(q, w))
+      const r = Array.from({ length: n }, (_, q) => read(q))
+      const apparatus = tomo[String(n)] ? read(n) : null
 
       let outputs = status.outputs || []
       let out = outputs.find((o) => o.slot === 'circuit') || outputs[0]
       if (!out || !(out.output_asset_id || out.asset_id)) {
-        const r = await call('GET', `/api/v1/jobs/${job.job_id}/result`)
-        outputs = r.outputs || []
+        const full = await call('GET', `/api/v1/jobs/${job.job_id}/result`)
+        outputs = full.outputs || []
         out = outputs.find((o) => o.slot === 'circuit') || outputs[0]
       }
       const handle = out && (out.output_asset_id || out.asset_id)
       if (!handle) throw new Error(`job ${job.job_id}: no circuit output to chain from`)
       log('step', { world, job: job.job_id, asset: handle })
-      return { circuit: handle, z, apparatus }
+      return { circuit: handle, r, apparatus }
     },
   }
 }

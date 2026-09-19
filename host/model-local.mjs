@@ -92,8 +92,8 @@ export function createLocalModel ({ worlds, python = findPython(), timeoutMs = N
       return r.worlds
     },
     async step ({ world, circuit = null, enter = null, couple = null }) {
-      const r = await runEngine({ op: 'step', world, circuit, enter, couple }, { python, timeoutMs, env })
-      return { circuit: r.circuit, z: r.z, apparatus: r.apparatus ?? null }
+      const out = await runEngine({ op: 'step', world, circuit, enter, couple }, { python, timeoutMs, env })
+      return { circuit: out.circuit, r: out.r, apparatus: out.apparatus ?? null }
     },
   }
 }

@@ -9,18 +9,31 @@
 // It speaks the same interface as the real backends:
 //
 //   worlds()                                -> [info]
-//   step({ world, circuit, enter, couple }) -> { circuit, z, apparatus }
+//   step({ world, circuit, enter, couple }) -> { circuit, r, apparatus }
 //
 // `circuit` is whatever the backend needs to carry a run between steps. Here
 // it is the fake's own state, which is why it is JSON and small.
 
-import { hash32, mulberry } from './pricing.mjs'
+import { hash32, mulberry, valueFactor } from './pricing.mjs'
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 const norm = (v) => Math.hypot(v[0], v[1], v[2])
 const unit = (d) => { const n = norm(d); return n > 1e-9 ? d.map((x) => x / n) : [0, 0, 1] }
 
-/** The clean reading of holding q after step k, in [-1, 1]. */
+/** A vector pulled back inside the Bloch ball, which is where a reading lives. */
+function inBall (v) {
+  const n = norm(v)
+  return n > 1 ? v.map((x) => x / n) : v
+}
+
+/**
+ * The clean reading of holding q after step k: [<X>, <Y>, <Z>].
+ *
+ * <Z> is what it always was. <X> and <Y> start at exactly zero, because the
+ * initial state is polarised on Z and has no transverse part at all, and grow
+ * as the world decoheres into one - which is the shape the real worlds have,
+ * and the reason reading three axes is worth anything.
+ */
 function trajectory (id, q, k) {
   const r = mulberry(hash32(`${id}:${q}`))
   const decay = 0.04 + 0.22 * r()
@@ -28,7 +41,13 @@ function trajectory (id, q, k) {
   const phi = Math.PI * 2 * r()
   const floor = -0.5 + r()
   const e = Math.exp(-decay * k)
-  return clamp(e * (0.55 + 0.45 * Math.cos(w * k + phi)) + (1 - e) * floor * 0.6, -1, 1)
+  const z = clamp(e * (0.55 + 0.45 * Math.cos(w * k + phi)) + (1 - e) * floor * 0.6, -1, 1)
+  const wx = 0.4 + 1.6 * r()
+  const px = Math.PI * 2 * r()
+  const wy = 0.4 + 1.6 * r()
+  const py = Math.PI * 2 * r()
+  const spread = 0.7 * (1 - e)
+  return inBall([spread * Math.cos(wx * k + px), spread * Math.sin(wy * k + py), z])
 }
 
 /** Twelve invented worlds: enough variety for an offer of three to differ. */
@@ -47,9 +66,12 @@ export function syntheticWorlds (steps = 10) {
     const words = 1 + (i % 3)
     const book = Array.from({ length: n }, (_, q) =>
       uniq.filter(([a, b]) => a === q || b === q).length * words)
+    // volatility is the range of the VALUE FACTOR, not of <Z>: the same figure
+    // model/engine.py's character() computes, measured on the same quantity the
+    // quote moves on
     const ranges = Array.from({ length: n }, (_, q) => {
-      const zs = Array.from({ length: steps }, (_, k) => trajectory(id, q, k))
-      return +(Math.max(...zs) - Math.min(...zs)).toFixed(4)
+      const fs = Array.from({ length: steps }, (_, k) => valueFactor(trajectory(id, q, k)))
+      return +(Math.max(...fs) - Math.min(...fs)).toFixed(4)
     })
     out.push({
       id, n, pairs: uniq, max_pairs: n * (n - 1) / 2,
@@ -89,7 +111,7 @@ export function createFakeModel ({ worlds = null, steps = 10, delayMs = 0 } = {}
       calls.push({ world, k: circuit ? circuit.k : 0, enter: Boolean(enter), couple })
       const n = info.n
       const k = circuit ? circuit.k + 1 : 0
-      const z = Array.from({ length: n }, (_, q) => trajectory(info.id, q, k))
+      const r = Array.from({ length: n }, (_, q) => trajectory(info.id, q, k))
       let app = circuit?.app ? [...circuit.app] : null
       if (enter) {
         const c = clamp(Number(enter.coherence ?? 1), 0, 1)
@@ -102,14 +124,19 @@ export function createFakeModel ({ worlds = null, steps = 10, delayMs = 0 } = {}
         // ZZ = 1 pulls the two Z's together: the holding toward the apparatus,
         // the apparatus toward the holding - and the coupling costs coherence.
         const m = 0.5 * norm(app)
-        const zt = z[t]
-        z[t] = clamp(zt * (1 - m) + app[2] * m, -1, 1)
-        app[2] = app[2] * (1 - m) + zt * m
+        const zt = r[t][2]
+        const az = app[2]          // both moves are made from the same instant
+        // the held holding also shortens as it entangles with the apparatus,
+        // which is monogamy: what it gains in correlation it loses from its own
+        // marginals, and the marginals are all the price can see
+        r[t] = inBall([r[t][0] * (1 - 0.3 * m), r[t][1] * (1 - 0.3 * m),
+                       clamp(zt * (1 - m) + az * m, -1, 1)])
+        app[2] = az * (1 - m) + zt * m
         app[0] *= 0.6
         app[1] *= 0.6
         app = app.map((x) => x * 0.82)
       }
-      return { circuit: { k, app }, z, apparatus: app ? [...app] : null }
+      return { circuit: { k, app }, r, apparatus: app ? [...app] : null }
     },
   }
 }

@@ -17,7 +17,7 @@ import { createCopy } from '../core/copy.mjs'
 import { createGame, HELP_SCENE } from '../core/game.mjs'
 import { createFakeModel, syntheticWorlds } from '../core/fake-model.mjs'
 import * as story from '../core/story.mjs'
-import { basePrice, quote, priceReturn, overview, prospectus } from '../core/pricing.mjs'
+import { basePrice, quote, priceReturn, valueFactor, overview, prospectus } from '../core/pricing.mjs'
 import { loadSpecs, infoOf, crc32, seedOf } from '../host/specs.mjs'
 import { widenQasm, blankQasm, qubitCount } from '../host/qasm.mjs'
 import { createHttpModel } from '../host/model-http.mjs'
@@ -137,7 +137,7 @@ section('the offer and entering a world')
   ok('no ticker means two things in one offer', new Set(all).size === all.length)
   const offered = S.worlds.map((w) => w.info.id).join()
   const r = await game.handle(S, '1')
-  ok('entering runs the first step and nothing else', S.world && S.world.z.length === 1 && model.calls.length === 1 && model.calls[0].couple === null)
+  ok('entering runs the first step and nothing else', S.world && S.world.readings.length === 1 && model.calls.length === 1 && model.calls[0].couple === null)
   ok('and shows the sheet and a captioned chart',
      has(r, /corporate monopolisation/) && r.emissions.some((e) => e.kind === 'traces' && /coherence/i.test(e.caption)))
   ok('entering costs no time', S.dayStep === 0)
@@ -162,13 +162,13 @@ section('watching')
   await game.handle(S, '1')
   S.coherence = 0.5
   const r = await game.handle(S, 'o')
-  ok('watching advances one step of the day', S.world.z.length === 2 && S.dayStep === 1)
+  ok('watching advances one step of the day', S.world.readings.length === 2 && S.dayStep === 1)
   ok('and the qubit recovers while watching', Math.abs(S.coherence - (0.5 + 1 / 9)) < 1e-9, String(S.coherence))
   ok('no leaving once something has been watched', !r.choices.some((c) => c.token === 'l'))
   ok('the panel moves to t1', r.emissions.some((e) => e.kind === 'traces' && e.upto === 1))
   let last
   for (let i = 0; i < 7; i++) last = await game.handle(S, 'o')
-  ok('t8 is the last chance', S.world.z.length === 9 && last.emissions.some((e) => /Last chance/.test(e.caption || '')))
+  ok('t8 is the last chance', S.world.readings.length === 9 && last.emissions.some((e) => /Last chance/.test(e.caption || '')))
   last = await game.handle(S, 'o')
   ok('watching the whole world ends the round untouched', S.world === null && has(last, /staked nothing/) && S.expect === 'world')
   ok('nine steps have passed', S.dayStep === 9 && game.summary(S).rounds === 1)
@@ -401,9 +401,13 @@ section('running out of money')
   await game.handle(S, '1')
   S.balance = 1
   for (const t of ['i', '1', '0', '9', 'h']) await game.handle(S, t)
-  // the worst possible move: bought at a reading of -1, closed at +1
-  S.world.z[0][0] = -1
-  S.world.z[1][0] = 1
+  // the worst possible move: bought as dear as a holding can be, closed as
+  // cheap. A reading along the weights themselves is where f reaches 1, and it
+  // is a real point on the Bloch sphere rather than an impossible one - <Z> = 1
+  // alone only gets f to 1/sqrt(3) now
+  const dear = [1, -1, 1].map((x) => x / Math.sqrt(3))
+  S.world.readings[0][0] = dear
+  S.world.readings[1][0] = dear.map((x) => -x)
   const r = await game.handle(S, 'c')
   ok('losing the last G says so', has(r, /out of money/) && S.balance >= 500)
   ok('and the rest of the day is forfeit', has(r, /The bell/) && S.dayIndex === 1 && S.dayStep === 0)
@@ -530,7 +534,7 @@ section('saving')
   ok('a session round-trips through disk', rec && rec.session.world.info.id === S.world.info.id && rec.log.length === 1)
   ok('the world list is not saved', rec.session.allWorlds === undefined)
   await game.handle(rec.session, 'o')
-  ok('and plays on after a reload', rec.session.world.z.length === 2 && rec.session.allWorlds !== undefined)
+  ok('and plays on after a reload', rec.session.world.readings.length === 2 && rec.session.allWorlds !== undefined)
   ok('one file per session', (await store.ids()).join() === 'abc')
   await store.remove('abc')
   ok('removed', (await store.ids()).length === 0)
@@ -577,7 +581,9 @@ section('specifications')
   ok('two unrelated halves are noticed',
      infoOf({ id: 'z', n: 4, targets: [{ expvals: { ZZ: 1 }, qubits: [0, 1] }, { expvals: { ZZ: 1 }, qubits: [2, 3] }] }).connected === false)
   const w = specs.worlds.find((x) => x.id === 'spec_n3_02')
-  ok('a real world reads as expected', w.n === 3 && w.pairs.length === 3 && w.constraints === 6 && w.book.join() === '4,4,4' && w.volatility > 1)
+  // volatility is the range of the VALUE FACTOR now, not of <Z>: the whole set
+  // reads lower (0.01-1.00, mean 0.49), so this is "lively", not "over half its range"
+  ok('a real world reads as expected', w.n === 3 && w.pairs.length === 3 && w.constraints === 6 && w.book.join() === '4,4,4' && w.volatility > 0.5 && w.volatility <= 2)
   ok('the fake model can offer the real worlds or its own',
      syntheticWorlds().length === 12 && syntheticWorlds().every((x) => x.book.length === x.n))
 }
@@ -590,9 +596,23 @@ section('pricing and the sheet')
   ok('a bigger book lists dearer', bases[3] > bases[0])
   ok('no two holdings list at the same price', new Set(bases).size === 4)
   ok('the float is stable', basePrice(info, 2) === bases[2])
-  ok('a falling reading is a rising quote', quote(bases[0], -1) > quote(bases[0], 1))
-  ok('a quote is positive for any reading', [-1, -0.5, 0, 0.5, 1].every((z) => quote(bases[1], z) > 0))
-  ok('holding through a recovery profits, through a decline loses', priceReturn(1, -1) > 0 && priceReturn(-1, 1) < 0)
+  const up = [0, 0, 1]
+  const down = [0, 0, -1]
+  ok('a rising reading is a rising quote', quote(bases[0], up) > quote(bases[0], down))
+  ok('a quote is positive for any reading',
+     [-1, -0.5, 0, 0.5, 1].every((z) => quote(bases[1], [0, 0, z]) > 0))
+  ok('holding through a rise profits, through a decline loses',
+     priceReturn(down, up) > 0 && priceReturn(up, down) < 0)
+  // growth and profitability count for a holding, financial risk against
+  ok('<X> counts for a holding and <Y> against',
+     valueFactor([1, 0, 0]) > 0 && valueFactor([0, 1, 0]) < 0)
+  ok('the value factor stays inside [-1, 1] at every corner of the ball',
+     [-1, 1].every((x) => [-1, 1].every((y) => [-1, 1].every((z) =>
+       Math.abs(valueFactor([x, y, z])) <= 1))))
+  ok('and the three axes are read on equal terms',
+     Math.abs(valueFactor([1, 0, 0])) === Math.abs(valueFactor([0, 1, 0])) &&
+     Math.abs(valueFactor([0, 1, 0])) === Math.abs(valueFactor([0, 0, 1])))
+  ok('an unreadable holding prices at its listing price', quote(bases[2], [0, 0, 0]) === bases[2])
   const copy = createCopy(COPY)
   const sheet = overview(copy, { id: 'spec_sheet_01', n: 4, book: [0, 3, 6, 12], pairs: [[0, 1], [1, 2], [2, 3]], max_pairs: 6 }, ['AAA', 'BBB', 'CCC', 'DDD'])
   ok('one row per holding, each priced', sheet.length === 4 && sheet.every((h) => /^[\d,]+G$/.test(h.price)))
@@ -671,7 +691,8 @@ section('the http backend, against a stand-in for the Moth API')
   const j1 = [...jobs.values()][0]
   ok('a first step sends n_qubits and no file', j1.params.n_qubits === 3 && !j1.input_files)
   ok('with the specification\'s targets and seed', j1.params.targets.length === 3 && j1.params.seed === seedOf(specs.specs.get('spec_n3_01')) && j1.params.tomography === 1)
-  ok('and returns readings and a handle', s0.z.length === 3 && typeof s0.circuit === 'string' && s0.apparatus === null && j1.polls >= 2)
+  ok('and returns readings and a handle', s0.r.length === 3 && s0.r.every((v) => v.length === 3) &&
+     typeof s0.circuit === 'string' && s0.apparatus === null && j1.polls >= 2)
   const s1 = await model.step({ world: 'spec_n3_01', circuit: s0.circuit })
   const j2 = [...jobs.values()][1]
   ok('a later step chains by asset id, without n_qubits', j2.input_files.initial_circuit === s0.circuit && !('n_qubits' in j2.params))
@@ -680,7 +701,7 @@ section('the http backend, against a stand-in for the Moth API')
   const uploaded = assets.get(j3.input_files.initial_circuit).bytes
   ok('entering downloads the circuit, widens it and uploads it', qubitCount(uploaded) === 5 && /cx q\[4\], q\[3\];/.test(uploaded) && uploaded.includes('// stepped'))
   ok('the coupling target is appended for the step', j3.params.targets.at(-1).qubits.join() === '3,2' && j3.params.targets.at(-1).expvals.ZZ === 1 && j3.params.targets.length === 4)
-  ok('and the apparatus is read back', Array.isArray(s2.apparatus) && s2.apparatus.length === 3 && s2.z.length === 3)
+  ok('and the apparatus is read back', Array.isArray(s2.apparatus) && s2.apparatus.length === 3 && s2.r.length === 3)
   ok('coupling with nothing in the circuit is refused before any job', await throws(() => model.step({ world: 'spec_n3_01', couple: 0 })))
   ok('an unknown world is refused', await throws(() => model.step({ world: 'nope' })))
   const bad = createHttpModel({ specs: specs.specs, worlds: specs.worlds, key: 'wrong', api: `http://localhost:${port}`, pollMs: { first: 1, max: 5 } })
@@ -694,7 +715,7 @@ section('the chart')
   const rows = (n, f) => Array.from({ length: 6 }, (_, k) => Array.from({ length: n }, (_, q) => f(k, q)))
   const png = (n, prices, extra = {}) => renderEmission({
     kind: 'traces', n, holdings: ['AAA', 'BBB', 'CCC', 'DDD', 'EEE', 'FFF', 'GGG'].slice(0, n),
-    z: prices, priced: prices, upto: prices.length - 1, totalReadouts: 10, target: 0, interventionAt: 1,
+    f: prices, priced: prices, upto: prices.length - 1, totalReadouts: 10, target: 0, interventionAt: 1,
     title: 'test', foot: { left: 't0', right: 't9 . quote in G, log scale' }, ...extra,
   })
   const isPng = (b) => b.length > 1000 && b.subarray(0, 4).equals(PNG)

@@ -5,11 +5,13 @@
 // and `model` for the physics - anything with
 //
 //   worlds()                                -> [info]
-//   step({ world, circuit, enter, couple }) -> { circuit, z, apparatus }
+//   step({ world, circuit, enter, couple }) -> { circuit, r, apparatus }
 //
 // where `circuit` is an opaque, JSON-safe handle the backend uses to carry a
 // run between steps (QASM3 text locally, an asset id over HTTP, a tiny object
-// for the fake). The game stores it in the session and hands it back.
+// for the fake). The game stores it in the session and hands it back. `r` is
+// one Bloch vector per holding, [<X>, <Y>, <Z>], and `apparatus` is the
+// player's own qubit read the same way - null until it is in the circuit.
 //
 // TIME IS TURN-BASED. Nothing moves until the player does. One step of a
 // world - t3 to t4, whether watched or held - is one step of the game clock.
@@ -23,14 +25,14 @@
 //   { kind: 'text',   text, speaker? }
 //   { kind: 'art',    art, text?, speaker? }              a named picture
 //   { kind: 'traces', title, caption, n, holdings, priced, clean, upto,
-//                     totalReadouts, target, interventionAt, foot, z }
+//                     totalReadouts, target, interventionAt, foot, f }
 //
 // `choices` are the tokens the player may send next, with labels - a renderer
 // makes buttons of them, or ignores them and lets the player type. Every
 // button is just a token the player could have typed.
 
 import {
-  DEFAULT_PRICE, basePrice, quote, priceReturn, prospectus, overview,
+  DEFAULT_PRICE, basePrice, quote, priceReturn, valueFactor, prospectus, overview,
   money, signedMoney, pct, fmt3, mulberry,
 } from './pricing.mjs'
 import * as story from './story.mjs'
@@ -84,7 +86,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     const v = [rnd() * 2 - 1, rnd() * 2 - 1, 1]
     const r = norm(v)
     return {
-      version: 4,
+      version: 5,
       seed,
       direction: v.map((x) => x / r),
       coherence: 1,
@@ -104,14 +106,14 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       beatsSeen: [], beat: null, unlocked: [], // beats
       expect: 'boot',
       worlds: null,                // the three on offer
-      world: null,                 // the one entered: {info, name, holdings, readouts, circuit, z}
+      world: null,                 // the one entered: {info, name, holdings, readouts, circuit, readings}
       pending: null,               // a stake being placed
       run: null,                   // an open position
     }
   }
 
   function summary (S) {
-    const k = S.world ? S.world.z.length - 1 : null
+    const k = S.world ? S.world.readings.length - 1 : null
     return {
       expect: S.expect,
       day: S.dayIndex + 1,
@@ -342,9 +344,9 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   /** The numbers behind a chart. What is drawn is the quote, not the reading. */
   function tracesPanel (S, { upto, target = null, interventionAt = null, title, clean = null }) {
     const info = S.world.info
-    const rows = S.world.z.slice(0, upto + 1)
+    const rows = S.world.readings.slice(0, upto + 1)
     const bases = Array.from({ length: info.n }, (_, q) => basePrice(info, q, R.price))
-    const price = (row) => row.map((z, q) => quote(bases[q], z, R.price))
+    const price = (row) => row.map((r, q) => quote(bases[q], r, R.price))
     return {
       kind: 'traces',
       n: info.n,
@@ -353,7 +355,9 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       totalReadouts: S.world.readouts,
       target,
       interventionAt,
-      z: rows,
+      // the value factor, not the raw reading: one number per holding per step,
+      // which is the whole of what the quote above it is made of
+      f: rows.map((row) => row.map((r) => valueFactor(r, R.price))),
       priced: rows.map(price),
       clean: clean ? clean.map(price) : null,
       title,
@@ -365,7 +369,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   }
 
   function sceneInvestment (S) {
-    const k = S.world.z.length - 1
+    const k = S.world.readings.length - 1
     S.expect = 'invest'
     return [{
       ...tracesPanel(S, { upto: k, title: C.t('plots.traces_title',
@@ -384,7 +388,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   function ghost (S) {
     const r = S.run
     if (!R.counterfactual || !r || !r.clean.length) return null
-    return [...S.world.z.slice(0, r.investAt + 1), ...r.clean]
+    return [...S.world.readings.slice(0, r.investAt + 1), ...r.clean]
   }
 
   function runningTitle (S, change) {
@@ -404,20 +408,22 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   /** After a held step: the chart so far, captioned with the reading. */
   function readoutPanel (S) {
     const r = S.run
-    const z = S.world.z
-    const k = z.length - 1
-    const z0 = z[r.investAt][r.target]
-    const now = z[k][r.target]
-    const prev = z[k - 1][r.target]
-    // inverted: a falling reading is a rising quote, so the arrow follows the
-    // price the player watches, not the physics underneath it
-    const arrow = now < prev - 1e-6 ? '↗' : (now > prev + 1e-6 ? '↘' : '→')
-    const mult = priceReturn(z0, now, R.price)
+    const rows = S.world.readings
+    const k = rows.length - 1
+    const opened = rows[r.investAt][r.target]
+    const now = rows[k][r.target]
+    const f = valueFactor(now, R.price)
+    const prev = valueFactor(rows[k - 1][r.target], R.price)
+    // no longer inverted: the quote is exp(+sigma * f), so a rising value
+    // factor is a rising price, and the arrow follows the physics as well as
+    // the price for the first time
+    const arrow = f > prev + 1e-6 ? '↗' : (f < prev - 1e-6 ? '↘' : '→')
+    const mult = priceReturn(opened, now, R.price)
     const caption = C.t('scenes.readout', {
       world: S.world.name, target: r.target, holding: C.holding(r.target, r.holdings),
       moment: C.moment(k),
       value: money(quote(r.base, now, R.price)), value_raw: quote(r.base, now, R.price),
-      reading: fmt3(now), reading_raw: now,
+      reading: fmt3(f), reading_raw: f,
       change: pct(mult), change_raw: mult, arrow,
       pl: signedMoney(r.stake * mult), pl_raw: r.stake * mult,
     })
@@ -451,9 +457,9 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   /** Enter a world: the first reading, and the sheet. */
   async function enterWorld (S, i) {
     const w = S.worlds[i - 1]
-    const r = await model.step({ world: w.info.id, circuit: null, enter: null, couple: null })
+    const first = await model.step({ world: w.info.id, circuit: null, enter: null, couple: null })
     S.world = { info: w.info, name: w.name, holdings: w.holdings, readouts: R.steps,
-                circuit: r.circuit, z: [r.z] }
+                circuit: first.circuit, readings: [first.r] }
     const pr = prospectus(C, w.info)
     const entered = text(C.t('scenes.entered', {
       world: w.name,
@@ -468,11 +474,11 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
 
   /** Watch one more step, with nothing staked. */
   async function observe (S) {
-    const r = await model.step({ world: S.world.info.id, circuit: S.world.circuit, enter: null, couple: null })
-    S.world.circuit = r.circuit
-    S.world.z.push(r.z)
+    const next = await model.step({ world: S.world.info.id, circuit: S.world.circuit, enter: null, couple: null })
+    S.world.circuit = next.circuit
+    S.world.readings.push(next.r)
     passStep(S)
-    const k = S.world.z.length - 1
+    const k = S.world.readings.length - 1
     const panel = sceneInvestment(S)
     if (bellDue(S)) return [...panel, ...endOfDay(S), ...endRound(S)]
     if (k >= S.world.readouts - 1) return [...panel, text(C.t('scenes.observed_all')), ...endRound(S)]
@@ -481,7 +487,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
 
   /** The stake is placed and the position opens. The coupling begins next step. */
   function openPosition (S) {
-    const k = S.world.z.length - 1
+    const k = S.world.readings.length - 1
     const { stake, target: q, exitAt } = S.pending
     S.pending = null
     S.balance -= stake
@@ -519,13 +525,13 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     if (R.counterfactual) calls.push(model.step({ world: id, circuit: r.cleanCircuit, enter: null, couple: null }))
     const [a, b] = await Promise.all(calls)
     S.world.circuit = a.circuit
-    S.world.z.push(a.z)
+    S.world.readings.push(a.r)
     r.entered = true
     if (Array.isArray(a.apparatus)) r.apparatus = a.apparatus
-    if (b) { r.cleanCircuit = b.circuit; r.clean.push(b.z) }
+    if (b) { r.cleanCircuit = b.circuit; r.clean.push(b.r) }
     passStep(S, { holding: true })
 
-    const k = S.world.z.length - 1
+    const k = S.world.readings.length - 1
     const out = [readoutPanel(S)]
     if (k >= r.exitAt) { r.exitAt = k; return [...out, ...closeOut(S)] }
     if (bellDue(S)) { r.exitAt = k; r.forced = true; return [...out, ...closeOut(S)] }
@@ -534,7 +540,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
 
   /** Close where it stands, before the chosen exit. */
   function closePosition (S) {
-    S.run.exitAt = S.world.z.length - 1
+    S.run.exitAt = S.world.readings.length - 1
     return closeOut(S)
   }
 
@@ -553,11 +559,14 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   /** The returns. The stake comes back scaled by the quote's move. */
   function settle (S) {
     const r = S.run
-    const z = S.world.z
-    const z0 = z[r.investAt][r.target]
-    const z1 = z[r.exitAt][r.target]
-    const dz = z1 - z0
-    const mult = priceReturn(z0, z1, R.price)
+    const rows = S.world.readings
+    const opened = rows[r.investAt][r.target]
+    const closed = rows[r.exitAt][r.target]
+    // the move, said as the one number the payout is a function of
+    const f0 = valueFactor(opened, R.price)
+    const f1 = valueFactor(closed, R.price)
+    const df = f1 - f0
+    const mult = priceReturn(opened, closed, R.price)
     // whole G, so an apparently flat day does not settle a hair under budget
     const returned = Math.round(r.stake * (1 + mult))
     const profit = returned - r.stake
@@ -572,17 +581,17 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
 
     const out = [text(C.t('scenes.returns', {
       target: r.target, holding: C.holding(r.target, r.holdings),
-      opened_at: money(quote(r.base, z0, R.price)), closed_at: money(quote(r.base, z1, R.price)),
-      opened_reading: z0.toFixed(4), closed_reading: z1.toFixed(4),
+      opened_at: money(quote(r.base, opened, R.price)), closed_at: money(quote(r.base, closed, R.price)),
+      opened_reading: f0.toFixed(4), closed_reading: f1.toFixed(4),
       exit: C.moment(r.exitAt),
-      change: `${dz >= 0 ? '+' : ''}${dz.toFixed(4)}`, change_raw: dz,
+      change: `${df >= 0 ? '+' : ''}${df.toFixed(4)}`, change_raw: df,
       multiplier: `${mult >= 0 ? '+' : ''}${mult.toFixed(4)}`, multiplier_raw: mult,
       stake: money(r.stake), stake_raw: r.stake,
       returned: money(returned), returned_raw: returned,
       profit: signedMoney(profit), profit_raw: profit,
       outcome: profit >= 0 ? 'profit' : 'loss',
       balance: money(S.balance), balance_raw: S.balance,
-      flat: Math.abs(dz) < 1e-6,
+      flat: Math.abs(df) < 1e-6,
       forced: Boolean(r.forced),
       coherence: S.coherence.toFixed(3), was_coherence: before.toFixed(3),
       drained: S.coherence < before - 0.3,
@@ -694,7 +703,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       }
 
       case 'invest': {
-        const k = S.world.z.length - 1
+        const k = S.world.readings.length - 1
         // leaving is free only before anything has been watched
         if (cmd === 'l' && k === 0) {
           S.world = null
@@ -730,7 +739,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
         }
         S.pending.target = q
         S.expect = 'exit'
-        const k = S.world.z.length - 1
+        const k = S.world.readings.length - 1
         const last = S.world.readouts - 1
         return result(S, [text(C.t('scenes.take_profit', {
           world: S.world.name, target: q, holding: C.holding(q, S.world.holdings),
@@ -739,7 +748,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       }
 
       case 'exit': {
-        const k = S.world.z.length - 1
+        const k = S.world.readings.length - 1
         const last = S.world.readouts - 1
         const e = num(cmd)
         if (e === null || !Number.isInteger(e) || e <= k || e > last) {
@@ -767,7 +776,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
         }
         S.pending.confirmed = false
         S.expect = 'exit'
-        const k = S.world.z.length - 1
+        const k = S.world.readings.length - 1
         return result(S, [text(C.t('scenes.ask_exit',
           { first: C.moment(k + 1), last: C.moment(S.world.readouts - 1) }))])
       }
@@ -832,7 +841,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       case 'invest':
         push('i', C.t('buttons.invest'))
         push('o', C.t('buttons.observe'))
-        if (S.world && S.world.z.length - 1 === 0) push('l', C.t('buttons.leave'))
+        if (S.world && S.world.readings.length - 1 === 0) push('l', C.t('buttons.leave'))
         break
       case 'stake': {
         const m = Math.floor(S.balance)
@@ -851,7 +860,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
         // guarded like the rest: a turn that threw part-way can leave `expect`
         // here with no world, and this is read while reporting that failure
         if (!S.world) break
-        const k = S.world.z.length - 1
+        const k = S.world.readings.length - 1
         const last = S.world.readouts - 1
         for (let r = k + 1; r <= last; r++) {
           push(`${r}`, C.t(r === last ? 'buttons.exit_end' : 'buttons.exit_point', { readout: r, moment: C.moment(r) }))

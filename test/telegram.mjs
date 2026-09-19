@@ -451,7 +451,7 @@ section('when Telegram says no')
     await say(h.bot, 'hi'); await say(h.bot, 'skip')
     h.sent.length = 0
     // an emission the renderer cannot draw: no series to plot
-    const broken = { kind: 'traces', n: 2, holdings: ['AA', 'BB'], priced: null, z: null,
+    const broken = { kind: 'traces', n: 2, holdings: ['AA', 'BB'], priced: null, f: null,
                      upto: 0, totalReadouts: 10, caption: 'AA @ 120G · +1.0%', title: 't' }
     await h.deliver(sessionId('42'), [broken], (await h.host.store.load(sessionId('42'))).session)
     ok('an undrawable chart still delivers its reading',
@@ -465,10 +465,10 @@ section('when Telegram says no')
   await say(warm.bot, 'hello')      // the first message to a new chat only walks them in
   await say(warm.bot, 'skip')
   await say(warm.bot, '1')
-  const at = (await warm.host.store.load(sessionId('42'))).session.world.z.length
+  const at = (await warm.host.store.load(sessionId('42'))).session.world.readings.length
   const dead = await harness({ seedDir: dir, fail: (m) => (m === 'sendPhoto' ? Object.assign(new Error('nope'), { error_code: 403 }) : null) })
   await say(dead.bot, 'o')
-  const now = (await dead.host.store.load(sessionId('42'))).session.world.z.length
+  const now = (await dead.host.store.load(sessionId('42'))).session.world.readings.length
   ok('a turn whose delivery failed is still saved', now === at + 1,
      `world was at ${at} readouts, now ${now} — a lost save would replay the step`)
   await rm(dir, { recursive: true, force: true })

@@ -68,8 +68,12 @@ Worth knowing when you choose:
 - **How many expectation values** in total sets the complexity word (`simple` …
   `labyrinthine`).
 - **Volatility** is measured, not declared: the mean over holdings of how far
-  `⟨Z⟩` travels across a clean run, `0`–`2`. A world whose holdings sit still has
-  nothing to bet on. The set here runs 0.45–1.09.
+  the **value factor** `f = (⟨X⟩ − ⟨Y⟩ + ⟨Z⟩)/√3` travels across a clean run,
+  `0`–`2`. A world whose holdings sit still has nothing to bet on. The set here
+  runs 0.01–1.00, mean 0.49.
+  Not `⟨Z⟩`: `f` is what the quote moves on (see `core/pricing.mjs`), and on a
+  densely wired world the two part company — the marginals go flat while the
+  correlations do all the work.
 - **A holding that never moves** is dead weight — nobody can trade it. The
   warmer reports these as `inert`.
 

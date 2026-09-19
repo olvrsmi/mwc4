@@ -44,7 +44,7 @@ mackenziewalk_04/
     game.mjs        createGame(): sessions, turns, days, weeks, positions
     story.mjs       scripted scenes and the beats of the probation week
     copy.mjs        every word comes from copy.yaml, rendered here
-    pricing.mjs     readings to quotes, the prospectus, the sheet
+    pricing.mjs     Bloch readings to quotes, the prospectus, the sheet
     fake-model.mjs  invented physics, so everything runs without Python
     copy.yaml       every word the player reads
   model/           the physics: QDrive, spoken as JSON over stdio
@@ -288,7 +288,7 @@ Emissions are what a renderer shows, in order:
 |---|---|---|
 | `text` | `text`, `speaker?` | a small markdown subset: `**bold**`, `_italic_`, `` `code` `` |
 | `art` | `art`, `text?`, `speaker?` | a named picture; `host/art/<name>.png` here |
-| `traces` | `title`, `caption`, `n`, `holdings`, `priced`, `clean`, `upto`, `totalReadouts`, `target`, `interventionAt`, `foot`, `z` | a chart; `host/render.mjs` draws it, or a renderer draws its own from the numbers |
+| `traces` | `title`, `caption`, `n`, `holdings`, `priced`, `clean`, `upto`, `totalReadouts`, `target`, `interventionAt`, `foot`, `f` | a chart; `host/render.mjs` draws it, or a renderer draws its own from the numbers. `priced` is the quote series, `f` the value factor behind it |
 
 `choices` is the list of `{ token, label, kind }` the player may send next,
 where `kind` is `game`, `scene` or `beat` - a beat's choices arrive alongside
@@ -301,8 +301,14 @@ The model is anything with two methods:
 
 ```
 worlds()                                -> [info]
-step({ world, circuit, enter, couple }) -> { circuit, z, apparatus }
+step({ world, circuit, enter, couple }) -> { circuit, r, apparatus }
 ```
+
+`r` is one Bloch vector per holding, `[<X>, <Y>, <Z>]`, and `apparatus` is the
+player's own qubit read the same way, or null while it is out of the circuit.
+The price reads all three axes - see `core/pricing.mjs` - because QDrive's
+single-qubit tomography measures all three anyway, so two of them were being
+thrown away.
 
 A world is stepped one request at a time and `circuit` is whatever the backend
 needs to carry a run between them: QASM3 text for the local engine, an asset

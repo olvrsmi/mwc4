@@ -146,7 +146,7 @@ head(`the physics — MW_MODEL=${SELECTED}`)
             env: { ...process.env, MW_QDRIVE_API_SRC: src, PYTHONWARNINGS: 'ignore' },
           })
           const r = JSON.parse(out)
-          if (r.ok) ok('local: the engine answered a real step', `${r.z.length} readings back`)
+          if (r.ok) ok('local: the engine answered a real step', `${r.r.length} readings back`)
           else bad('local: the engine refused a step', r.error, true)
         } catch (e) {
           bad('local: the engine could not be run', String(e.message).split('\n').slice(0, 2).join(' | '), true)

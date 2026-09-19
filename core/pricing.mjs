@@ -6,20 +6,40 @@
 // that worth divided by however many shares happened to be issued when it
 // listed, which is a historical accident and carries no information at all.
 //
-// The quote moves as exp(-sigma * <Z>). Inverted, because a world starts
-// polarised at <Z> ~ +1 and decoheres toward zero, so -<Z> is the direction
-// that rises: a distressed book recovering. Multiplicative, so a quote is
-// positive for every possible reading and needs no clamp, floor or special case.
+// A reading is a Bloch vector, [<X>, <Y>, <Z>], and the quote moves as
+// exp(sigma * f) where f = (w . r)/|w| is that vector scored against the
+// weights: growth (<Z>) and profitability (<X>) count for a holding, financial
+// risk (<Y>) against. Dividing by |w| holds f in [-1, 1] - the range a single
+// axis had - so sigma means the same thing as it did on one axis.
 //
-// Only the picture depends on the listing price. A payout is
-// stake x (1 + priceReturn(zIn, zOut)), a function of the readings alone.
+// It reads three axes because all three were already being measured. QDrive's
+// single-qubit tomography returns X, Y and Z together; the engine was throwing
+// two of them away and pricing from the third.
+//
+// NOT inverted. The old quote was exp(-sigma * <Z>), which rose as <Z> fell,
+// because a world starts polarised at <Z> ~ +1 and decoheres toward zero and
+// that was the only direction there was to rise in. f is signed the way the
+// physics is, so a world that decoheres is now a world whose quotes fall
+// unless <X> carries them - which re-scores every holding, and roughly inverts
+// which ones look good.
+//
+// Still multiplicative, so a quote is positive for every possible reading and
+// needs no clamp, floor or special case. Only the picture depends on the
+// listing price: a payout is stake x (1 + priceReturn(rIn, rOut)), a function
+// of the readings alone.
 
 export const DEFAULT_PRICE = {
-  sigma: 0.5,     // how far a full swing of <Z> moves the quote
+  sigma: 0.5,     // how far a full swing of the value factor moves the quote
   unit: 90,       // G, the price of an empty book
   gamma: 0.35,    // how hard the book is compressed into a price
   spread: 1.3,    // widest the issued float pulls a quote either way
+  // What each axis is worth to a holding, over (<X>, <Y>, <Z>). Mirrored in
+  // model/engine.py as WEIGHTS, which needs them to measure volatility on the
+  // same quantity the quote moves on.
+  weights: [1, -1, 1],
 }
+
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 
 // `|| 0` collapses negative zero, which would otherwise print as "-0G"
 export const money = (v) => `${(Math.round(v) || 0).toLocaleString('en-GB')}G`
@@ -53,9 +73,25 @@ export function basePrice (info, q, P = DEFAULT_PRICE) {
   return P.unit * Math.pow(1 + book, P.gamma) * float
 }
 
+/**
+ * The scalar a quote is made of: a reading scored against the weights, in
+ * [-1, 1]. Ported to model/engine.py as value_factor(), where it is what a
+ * world's advertised volatility is measured on.
+ *
+ * Bounded twice over, and the second bound is the interesting one: f <= |r|,
+ * the Bloch length, which shortens as a holding entangles. A densely wired
+ * world cannot reach the extremes of its own price range, because the
+ * information has moved into correlations this reading does not look at.
+ */
+export function valueFactor (r, P = DEFAULT_PRICE) {
+  const [wx, wy, wz] = P.weights || DEFAULT_PRICE.weights
+  const [x = 0, y = 0, z = 0] = r || []
+  return clamp((wx * x + wy * y + wz * z) / (Math.hypot(wx, wy, wz) || 1), -1, 1)
+}
+
 /** A quote from a listing price and a reading. */
-export function quote (base, z, P = DEFAULT_PRICE) {
-  return base * Math.exp(-P.sigma * z)
+export function quote (base, r, P = DEFAULT_PRICE) {
+  return base * Math.exp(P.sigma * valueFactor(r, P))
 }
 
 /**
@@ -63,8 +99,8 @@ export function quote (base, z, P = DEFAULT_PRICE) {
  * a cheap holding and a dear one pay the same for the same move - which is why
  * the quote cannot be used to pick a winner.
  */
-export function priceReturn (zIn, zOut, P = DEFAULT_PRICE) {
-  return Math.exp(P.sigma * (zIn - zOut)) - 1
+export function priceReturn (rIn, rOut, P = DEFAULT_PRICE) {
+  return Math.exp(P.sigma * (valueFactor(rOut, P) - valueFactor(rIn, P))) - 1
 }
 
 /**

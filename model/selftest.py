@@ -35,18 +35,27 @@ def ok(name, cond, detail=''):
         print(f'  FAIL  {name}' + (f'\n        {detail}' if detail else ''))
 
 
+def flat(v):
+    """Every number in a nested list, in order. A reading is [<X>, <Y>, <Z>]
+    now, so what used to be a table of scalars is a table of triples."""
+    if isinstance(v, (list, tuple)):
+        return [x for item in v for x in flat(item)]
+    return [float(v)]
+
+
 def close(a, b, tol=1e-9):
-    return all(abs(x - y) <= tol for ra, rb in zip(a, b) for x, y in zip(ra, rb))
+    fa, fb = flat(a), flat(b)
+    return len(fa) == len(fb) and all(abs(x - y) <= tol for x, y in zip(fa, fb))
 
 
 SPEC = 'spec_n3_01'
 STEPS = 5
 
 # --- a world is the same world twice ----------------------------------------
-a = engine.run(SPEC, STEPS, [0, 0, 1], 1.0)['z']
-b = engine.run(SPEC, STEPS, [0, 0, 1], 1.0)['z']
+a = engine.run(SPEC, STEPS, [0, 0, 1], 1.0)['r']
+b = engine.run(SPEC, STEPS, [0, 0, 1], 1.0)['r']
 ok('a world runs the same way twice', close(a, b),
-   f'{[round(v, 3) for v in a[0]]} vs {[round(v, 3) for v in b[0]]}')
+   f'{[round(v, 3) for v in flat(a[0])]} vs {[round(v, 3) for v in flat(b[0])]}')
 
 # --- stepped one request at a time, it is the same world -------------------
 #
@@ -57,9 +66,9 @@ chain, circuit = [], None
 for k in range(STEPS):
     r = engine.op_step({'world': SPEC, 'circuit': circuit})
     circuit = r['circuit']
-    chain.append(r['z'])
+    chain.append(r['r'])
 ok('stepping one request at a time gives the batch run', close(chain, a, 1e-6),
-   f'{[round(v, 3) for v in chain[-1]]} vs {[round(v, 3) for v in a[-1]]}')
+   f'{[round(v, 3) for v in flat(chain[-1])]} vs {[round(v, 3) for v in flat(a[-1])]}')
 
 # and across processes, through the real protocol
 here = os.path.dirname(os.path.abspath(__file__))
@@ -71,12 +80,12 @@ for k in range(2):
     body = json.loads(p.stdout)
     assert body['ok'], body
     circuit = body['circuit']
-    out.append(body['z'])
+    out.append(body['r'])
 ok('and the same across processes', close(out, a[:2], 1e-6))
 
 # --- nothing about the player reaches the world before they invest -----------
-full = engine.run(SPEC, STEPS, [0, 0, 1], 1.0)['z']
-spent = engine.run(SPEC, STEPS, [0.6, 0, 0.8], 0.2)['z']
+full = engine.run(SPEC, STEPS, [0, 0, 1], 1.0)['r']
+spent = engine.run(SPEC, STEPS, [0.6, 0, 0.8], 0.2)['r']
 ok('an uncoupled player cannot change a world', close(full, spent))
 
 # --- entering and coupling ---------------------------------------------------
@@ -86,12 +95,13 @@ before = []
 for k in range(INVEST + 1):
     r = engine.op_step({'world': SPEC, 'circuit': circuit})
     circuit = r['circuit']
-    before.append(r['z'])
+    before.append(r['r'])
 held = engine.op_step({'world': SPEC, 'circuit': circuit,
                        'enter': {'direction': [0, 0, 1], 'coherence': 0.8}, 'couple': 1})
 clean = engine.op_step({'world': SPEC, 'circuit': circuit})
 ok('the apparatus joins the circuit', held['apparatus'] is not None)
-ok('coupling changes the held holding', abs(held['z'][1] - clean['z'][1]) > 1e-4,
+moved = max(abs(x - y) for x, y in zip(held['r'][1], clean['r'][1]))
+ok('coupling changes the held holding', moved > 1e-4,
    'coupling changed nothing - is the ZZ target being applied?')
 ok('the reading a player bought at is untouched by entering',
    close([before[-1]], [before[-1]]))   # entering is not a step; nothing to compare but itself
@@ -101,7 +111,22 @@ c2 = math.sqrt(sum(x * x for x in r2['apparatus']))
 ok('holding a position spends coherence', c2 < 0.8 or c1 < 0.8,
    f'came back at {c1:.3f} then {c2:.3f}')
 ok('every reading is inside [-1, 1]',
-   all(-1.0 <= v <= 1.0 for row in chain + [held['z'], r2['z']] for v in row))
+   all(-1.0 <= v <= 1.0 for v in flat(chain + [held['r'], r2['r']])))
+
+# --- the price reads all three axes, and volatility is measured on it -------
+#
+# <Z> alone is not what a quote moves on any more. The number the prospectus
+# advertises has to be the range of the value factor, or a world that is flat
+# in the marginals and busy in its correlations is sold as the wrong thing.
+fs = [[engine.value_factor(reading) for reading in row] for row in a]
+ok('a value factor stays inside [-1, 1]', all(-1.0 <= v <= 1.0 for v in flat(fs)))
+ok('a reading carries all three components',
+   all(len(reading) == 3 for row in a for reading in row))
+char = engine.character(SPEC, STEPS)
+ranges = [max(col) - min(col) for col in zip(*fs)]
+ok('volatility is the mean range of the value factor',
+   abs(char['volatility'] - sum(ranges) / len(ranges)) < 5e-4,
+   f"{char['volatility']} vs {sum(ranges) / len(ranges):.4f}")
 
 # --- widening by text is widening with qiskit -------------------------------
 #
