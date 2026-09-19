@@ -437,14 +437,7 @@ sequences:
         _Holds out lanyard_
       choices:
         a:
-          label: Take it, quickly
-          speaker: Daniel
-          reply: |
-            Man, my first day was so exciting, welcome to MWC. Welcome to the future!
-            
-            Follow me.
-        b:
-          label: Take it, calmly    
+          label: Take it
           speaker: Daniel
           reply: |
             Thats you, welcome to MWC. Welcome to the future!
