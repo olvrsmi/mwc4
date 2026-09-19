@@ -1,0 +1,12 @@
+1.000000
+
+world            spec_n2_04  (n=2)
+held             q0, from t0 to t9
+apparatus in     |r| 1.000000  on [0, 0, 1]
+apparatus out    |r| 1.000000  on [+0.0389, +0.0090, +1.0000]
+spent            0.000000  (0.0% of what went in)
+
+The apparatus is read after the last held step. Its length is the
+coherence the player carries into the next round; its direction is the
+axis they carry with it. ZZ = 1 is the only word the coupling drives, so
+a world that does not move <Z> much does not spend much.

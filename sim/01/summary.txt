@@ -1,0 +1,54 @@
+46 worlds  .  100G on the cheapest holding at t0, held to t9
+apparatus in at |r| 1.000 on [0, 0, 1], coupling ZZ = 1 every held step
+
+world          n  held    opened     closed    return       P/L  coherence
+spec_n2_01     2  q0        223G       232G     +4.1%       +4G   0.8806
+spec_n2_02     2  q1        123G       192G    +56.7%      +57G   0.9730
+spec_n2_03     2  q0        153G       158G     +3.6%       +4G   1.0000
+spec_n2_04     2  q0        139G       140G     +1.1%       +1G   1.0000
+spec_n2_05     2  q1        167G       160G     -4.1%       -4G   0.9700
+spec_n2_06     2  q0        134G       129G     -3.9%       -4G   0.1731
+spec_n3_01     3  q0        201G       161G    -20.1%      -20G   0.1851
+spec_n3_02     3  q2        208G       211G     +1.3%       +1G   0.4048
+spec_n3_03     3  q2        172G       146G    -14.7%      -15G   0.7673
+spec_n3_04     3  q2        186G       194G     +4.2%       +4G   0.4239
+spec_n3_05     3  q1        178G       185G     +3.6%       +4G   0.9456
+spec_n3_06     3  q0        149G       134G    -10.1%      -10G   0.2726
+spec_n3_07     3  q2        146G       137G     -6.1%       -6G   0.2184
+spec_n3_08     3  q1        173G       164G     -4.9%       -5G   0.7377
+spec_n3_09     3  q0        171G       159G     -7.1%       -7G   0.6114
+spec_n3_10     3  q1        177G       143G    -19.5%      -19G   0.2939
+spec_n3_11     3  q2        157G       133G    -15.2%      -15G   0.4816
+spec_n3_12     3  q0        194G       161G    -17.0%      -17G   0.1385
+spec_n3_13     3  q1        174G       142G    -18.2%      -18G   0.2446
+spec_n3_14     3  q1        174G       167G     -4.3%       -4G   0.6277
+spec_n3_15     3  q0        134G       135G     +0.9%       +1G   0.9143
+spec_n3_16     3  q2        143G       115G    -19.3%      -19G   0.5055
+spec_n4_01     4  q2        179G       183G     +2.1%       +2G   0.9156
+spec_n4_02     4  q0        141G       141G     -0.0%       +0G   0.9011
+spec_n4_03     4  q2        142G       140G     -1.3%       -1G   0.8270
+spec_n4_04     4  q1        201G       170G    -15.2%      -15G   0.1103
+spec_n4_05     4  q2        146G       125G    -14.4%      -14G   0.6599
+spec_n4_06     4  q3        173G       117G    -32.5%      -32G   0.4614
+spec_n4_07     4  q3        150G       142G     -5.6%       -6G   0.1279
+spec_n4_08     4  q2        184G       243G    +32.1%      +32G   0.2020
+spec_n4_09     4  q3        165G       163G     -1.3%       -1G   0.9105
+spec_n4_10     4  q0        144G       129G    -10.3%      -10G   0.4449
+spec_n4_11     4  q1        103G       121G    +17.7%      +18G   0.2882
+spec_n4_12     4  q0        151G       189G    +24.7%      +25G   0.1002
+spec_n5_01     5  q4        205G       210G     +2.1%       +2G   0.9896
+spec_n5_02     5  q4        123G       107G    -12.6%      -13G   0.8029
+spec_n5_03     5  q0        165G       165G     -0.4%       +0G   0.9745
+spec_n5_04     5  q4        120G       125G     +4.0%       +4G   0.4054
+spec_n5_05     5  q3        210G       177G    -15.4%      -15G   0.1049
+spec_n5_06     5  q0        137G       128G     -6.1%       -6G   0.8348
+spec_n6_01     6  q4        115G       117G     +1.6%       +2G   0.1119
+spec_n6_02     6  q5        142G       138G     -2.3%       -2G   0.1497
+spec_n6_03     6  q1         93G       116G    +25.4%      +25G   0.2162
+spec_n6_04     6  q5        144G       131G     -9.1%       -9G   0.8279
+spec_n7_01     7  q5        123G       140G    +13.3%      +13G   0.4441
+spec_n7_02     7  q1         92G        82G    -10.3%      -10G   0.1475
+
+staked 4,600G, returned 4,502G  .  -98G overall (-2.1%)
+17 of 46 profitable, 2 flat, 27 down
+mean coherence returned 0.5376, worst 0.1002, best 1.0000
