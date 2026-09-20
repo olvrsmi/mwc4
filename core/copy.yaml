@@ -70,9 +70,8 @@ scenes:
   # {day} {budget} {coherence} {recovering} {recovery} {week_line}
   # {days_left} {target} {target_left} {ahead} {surplus} {made} {week_bonus}
   # {pot} {has_pot} {balance} {pl} {round} {upgrades} {day_left} {probation}
+  day_title: "Day {day}"
   day: |
-    **Day {day}**
-
     You have a budget of {budget}.
     {week_line}
 
@@ -109,8 +108,8 @@ scenes:
   # {day} {steps_left} {week_line} {budget} {coherence} {balance} {recovering}
   # {recovery} {days_left} {target} {target_left} {ahead} {surplus} {made}
   # {week_bonus} {pot} {has_pot} {pl} {upgrades} {probation}
+  status_title: Status
   status: |
-    **Status**
     It's day {day}, {steps_left} remaining.
 
     {week_line}
@@ -127,8 +126,8 @@ scenes:
   # whole market; the complexity word under them is that pair said in English.
   #
   # {world} {opportunities} {complexity} {monopoly} {volatility} {disconnected}
+  entered_title: "Report: {world}"
   entered: |
-    **Report: {world}**
     {monopoly}% corporate monopolisation
     {volatility}% expected volatility
     {complexity}
@@ -161,9 +160,8 @@ scenes:
   # {holding} {target} {opened_at} {closed_at} {change} {multiplier} {stake}
   # {returned} {profit} {balance} {outcome} {coherence} {was_coherence}
   # {flat} {drained} {forced}
+  returns_title: Returns
   returns: |
-    **Returns**
-
     {holding}: open @ {opened_at}, close @ {closed_at}
     Investment {stake} · return {returned}
 
@@ -178,14 +176,15 @@ scenes:
 
   left: You leave before anything is committed.
   observed_all: You observed the whole circuit and staked nothing. Your qubit is untouched.
-  broke: "**You are out of money. The walk ends here.**"
+  broke_title: The walk ends here
+  broke: You are out of money.
   nothing_to_stake: You have nothing left to stake.
   turn_failed: Something went wrong at this end and your last move was lost. Send anything to pick up where you were.
 
   # {recharge} {unit_cost} {coherence} {balance} {budget} {bonus} {units}
   # {upgrades} {recovering} {recovery}
+  marketplace_title: The workshop
   marketplace: |
-    **The workshop**
     A spent investment-bit cleans up on its own in {recharge}. Each upgrade buys a quarter again, once, for {unit_cost} out of today's budget.
 
     Coherence {coherence} · today's balance {balance}
@@ -205,21 +204,21 @@ scenes:
   # the cut like any other missed day.
   #
   # {day} {pl} {good} {traded} {idle} {was_budget} {budget} {change} {floored} {floor}
+  day_end_title: The Bell
   day_end: |
-    **The Bell**
     Day {day} closes.  {#if idle}You made no investments today.{:else}Result: {pl}{/if}
 
     {#if good}You reached your target for the day, and will have an increased budget tomorrow.{:else}You failed to reach your target for the day, your budget will be cut tomorrow.{/if}
 
   # {total} {paid} {bonus} {pot}
+  week_end_title: The week closes
   week_end: |
-    **The week closes.** Seven days came to {total}.
+    Seven days came to {total}.
     {#if paid}A personal bonus of {bonus} has been paid. Your pot stands at {pot}. It cannot be invested.{:else}No bonus this week.{/if}
 
   # {worlds} {skipped} {recharge}
+  welcome_title: OFFICE 4B, 6 MACKENZIE WALK
   welcome: |
-    **OFFICE 4B, 6 MACKENZIE WALK**
-
     Welcome to Mackenzie Walk Capital, London's premier neo-market-day-trading firm.
 
     As a quick refresher, neo-markets are ultra-small markets opened up for investment as one of the early benefits of 2028's discovery of AGI. Initially focused on ecosystems and microclimates, with an as-yet unrealised hope that this could allow hedging against climate collapse, the increasing rate of cyborg-centaur-competition has lead to ever smaller markets being discovered. It’s estimated that market count doubles every 3 days, and this rate of doubling has itself doubled in the last month.
@@ -251,8 +250,8 @@ chatter:
 prompts:
   # {options}
   unknown: "Type {options}."
+  help_title: Commands
   help: |
-    **Commands**
     `1` `2` `3` — enter a world · `m` — marketplace
     `i` — invest · `o` — observe on · `l` — leave
     `b` / `s` — buy or sell regeneration · `l` — leave the marketplace
@@ -444,8 +443,10 @@ beats:
     4: change2
 
   # {day} {budget} {attempt}
-  change1: |
-    _[your mouse feels different today, not massively but the texture's changed. Is it a bit heavier too?]_
+  change1:
+    voice: player
+    text: |
+      _[your mouse feels different today, not massively but the texture's changed. Is it a bit heavier too?]_
 
   change2:
     text: |
@@ -517,8 +518,7 @@ sequences:
     - art: himbo
       speaker: Daniel
       text: |
-        There you are, you made it past security. I should tell them to sharpen
-        up haha
+        There you are, you made it past security. I should tell them to sharpen up haha
 
         _Holds out lanyard_
       choices:
@@ -530,7 +530,8 @@ sequences:
             
             Follow me.
 
-    - text: |
+    - voice: player
+      text: |
         _[You follow Daniel to the lift, remembering him exuding the same kind of hopeful energy throughout your entire 15 round, 12 minute interview process.]_
 
     - speaker: Daniel
@@ -562,20 +563,24 @@ sequences:
     - text: |
         Catch you on a drinkfood break maybe, have a good one.
 
-    - text: |
+    - voice: player
+      text: |
         _The lift creaks into place and the doors open, 12 industrial revolutions down and we still haven't got the one that solves for general maintenance. You step in._
 
       choices:
         a:
           label: "[17]"
+          voice: player
           reply: |
             _Well remembered, you feel like you're being tested somehow, even now. Doors close and the lift starts to move..._
         b:
           label: "[-1]"
+          voice: player
           reply: |
             _Oops, you catch yourself in time and press 17. The lift closes and carries you up..._
         c:
           label: "[??]"
+          voice: player
           reply: |
             _No response. Thankfully. You hit 17 and the lift starts to move..._
 
@@ -718,15 +723,13 @@ sequences:
   # scene plays on the first failure and `probation_failed_again` after that.
   # Leave that one empty and the full scene plays again instead.
   probation_passed:
-    - text: |
-        **Seven days. {total}.**
-
+    - title: "Seven days. {total}."
+      text: |
         You are off probation. The desk is yours.
 
   probation_failed:
-    - text: |
-        **Seven days. {total}.**
-
+    - title: "Seven days. {total}."
+      text: |
         Not a profitable week, so not yet a desk. You start again on {budget}{#if again} — attempt {attempt}{/if}.
 
         Your qubit is where you left it, at {coherence}. That much is yours.

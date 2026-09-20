@@ -289,9 +289,19 @@ Emissions are what a renderer shows, in order:
 
 | kind | fields | |
 |---|---|---|
-| `text` | `text`, `speaker?` | a small markdown subset: `**bold**`, `_italic_`, `` `code` `` |
-| `art` | `art`, `text?`, `speaker?` | a named picture; `host/art/<name>.png` here |
+| `text` | `text`, `speaker?`, `title?`, `voice?` | a small markdown subset: `**bold**`, `_italic_`, `` `code` `` |
+| `art` | `art`, `text?`, `speaker?`, `title?`, `voice?` | a named picture; `host/art/<name>.png` here |
 | `traces` | `title`, `caption?`, `n`, `holdings`, `priced`, `clean`, `upto`, `totalReadouts`, `target`, `interventionAt`, `foot`, `f` | a chart; `host/render.mjs` draws it, or a renderer draws its own from the numbers. `priced` is the quote series, `f` the value factor behind it. The game sends charts without a caption - what one says is drawn on it |
+
+`title` is the heading over a line: a speaker's name is one, and so is
+`Day 3` or `Report: Liked Rounds`, which the game reads from a `<key>_title`
+beside the body in copy.yaml. `voice: 'player'` marks a line spoken by or
+about the player rather than at them - a writer sets it on a node, because a
+scripted line narrating what the player just did and a line of somebody else's
+narration are both text with no speaker on them, and nothing downstream can
+tell them apart. Both exist for renderers that draw the difference: the
+browser heads a message with the one and picks a side of the page with the
+other, while Telegram prints a heading as a bold line and ignores the voice.
 
 `choices` is the list of `{ token, label, kind }` the player may send next,
 where `kind` is `game`, `scene` or `beat` - a beat's choices arrive alongside

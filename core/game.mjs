@@ -22,13 +22,18 @@
 // A turn is handle(S, token) -> { emissions, choices, summary }. Emissions are
 // what a renderer shows:
 //
-//   { kind: 'text',   text, speaker? }
-//   { kind: 'art',    art, text?, speaker? }              a named picture
+//   { kind: 'text',   text, speaker?, title?, voice? }
+//   { kind: 'art',    art, text?, speaker?, title?, voice? }   a named picture
 //   { kind: 'traces', title, caption, n, holdings, priced, clean, upto,
 //                     totalReadouts, target, interventionAt, foot, f }
 //
 // Each also carries `delay`, the milliseconds a client waits before showing it
 // - see pacing.mjs - and a scene's carry `pace: true` besides.
+//
+// `title` is the heading over a line - a speaker's name is one, and so is
+// `Day 3` or `Report: Liked Rounds`. `voice: 'player'` marks a line spoken by
+// or about the player rather than at them. Both exist for renderers that draw
+// the difference; one that does not is free to ignore them.
 //
 // `choices` are the tokens the player may send next, with labels - a renderer
 // makes buttons of them, or ignores them and lets the player type. Every
@@ -69,7 +74,16 @@ const RETIRED_EXIT = new Set(['exit', 'confirm_exit'])
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 const norm = (v) => Math.hypot(v[0], v[1], v[2])
-const text = (t) => ({ kind: 'text', text: t })
+/**
+ * A line, and the heading over it when it has one.
+ *
+ * The game's own blocks - the day, the bell, a report, the returns - are
+ * headed rather than spoken, and the heading is the writer's: it is a
+ * `_title` key beside the body in copy.yaml, rendered with the same values.
+ * A renderer draws it however it likes, or not at all; a heading nobody asked
+ * for is simply absent from the emission.
+ */
+const text = (t, title = null) => ({ kind: 'text', text: t, ...(title ? { title } : {}) })
 const num = (s) => {
   const v = Number(String(s).replace(/[, gG]/g, ''))
   return Number.isFinite(v) ? v : null
@@ -81,6 +95,16 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   const R = { ...DEFAULT_RULES, ...rules, price: { ...DEFAULT_PRICE, ...(rules.price || {}) } }
   let C = copy
   void random
+
+  /**
+   * One of the game's own blocks: its body and the heading over it.
+   *
+   * The heading lives beside the body in copy.yaml as `<key>_title` and is
+   * rendered with the same values, so `Report: {world}` names the world it
+   * heads. A writer changing either finds both in one place.
+   */
+  const titled = (key, ctx = {}) =>
+    text(C.t(`scenes.${key}`, ctx), C.t(`scenes.${key}_title`, ctx))
 
   // -------------------------------------------------------------------------
   // The session
@@ -295,7 +319,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   /** The bell: the books, the night, the week if it is over, and the new day's beat. */
   function endOfDay (S) {
     const r = closeDay(S)
-    const out = [text(C.t('scenes.day_end', {
+    const out = [titled('day_end', {
       day: r.day,
       pl: signedMoney(r.pl), pl_raw: r.pl,
       good: r.good, traded: r.traded, idle: !r.traded,
@@ -303,14 +327,16 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       change: r.good ? `+${Math.round((R.budgetUp - 1) * 100)}%` : `-${Math.round((1 - R.budgetDown) * 100)}%`,
       floored: r.next === R.budgetFloor,
       floor: money(R.budgetFloor),
-    }))]
+    })]
     const gained = regen(S, R.nightSteps)
     // said whether or not anything came back: a terminal already clean still
     // spends the night doing this, and going home is what ends a day
-    out.push(text(C.t('scenes.night', {
+    // the player's own evening rather than the desk's - so it is voiced as
+    // theirs, like the scripted lines that narrate what they did
+    out.push({ ...text(C.t('scenes.night', {
       elapsed: 'A night', gained: `coherence +${gained.toFixed(3)}`,
       recovered: gained > 0.0005,
-    })))
+    })), voice: 'player' })
     if (r.weekTotal !== null) {
       const ctx = {
         total: signedMoney(r.weekTotal), total_raw: r.weekTotal,
@@ -325,7 +351,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
         out.push(...story.startSequence(C, S, verdictScene(r), ctx))
         if (story.inSequence(S)) { S.expect = 'sequence'; return out }
       } else {
-        out.push(text(C.t('scenes.week_end', ctx)))
+        out.push(titled('week_end', ctx))
       }
     }
     // the day is established before anything that happens in it, the day's
@@ -394,7 +420,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   }
 
   function sceneMain (S) {
-    return [text(C.t('scenes.day', standing(S)))]
+    return [titled('day', standing(S))]
   }
 
   /**
@@ -405,7 +431,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
    * the budget - are no longer what it says. This is where they are read.
    */
   function sceneStatus (S) {
-    return [text(C.t('scenes.status', standing(S)))]
+    return [titled('status', standing(S))]
   }
 
   /** Three worlds, named and tickered, distinct within the offer. */
@@ -525,7 +551,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   function sceneMarket (S) {
     S.expect = 'market'
     const recovering = S.coherence < 0.999
-    return [text(C.t('scenes.marketplace', {
+    return [titled('marketplace', {
       recharge: describeSteps(R.regenSteps),
       unit_cost: money(R.upgradeCost),
       coherence: S.coherence.toFixed(3), coherence_raw: S.coherence,
@@ -535,7 +561,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       units: S.regenUnits, upgrades: S.regenUnits,
       recovering,
       recovery: recovering ? describeSteps(stepsToFull(S)) : '',
-    }))]
+    })]
   }
 
   // -------------------------------------------------------------------------
@@ -549,14 +575,14 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     S.world = { info: w.info, name: w.name, holdings: w.holdings, readouts: R.steps,
                 circuit: first.circuit, readings: [first.r] }
     const pr = prospectus(C, w.info)
-    const entered = text(C.t('scenes.entered', {
+    const entered = titled('entered', {
       world: w.name,
       rows: overview(C, w.info, w.holdings, R.price)
         .map((h) => C.t('scenes.overview_row', h)).join('\n'),
       opportunities: pr.opportunities, complexity: pr.complexity,
       monopoly: pr.monopoly, volatility: pr.volatility,
       disconnected: w.info.connected === false,
-    }))
+    })
     return [entered, ...sceneInvestment(S)]
   }
 
@@ -641,7 +667,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   function closeOut (S) {
     const out = settle(S)
     const broke = S.balance < 1
-    if (broke) out.push(text(C.t('scenes.broke')))
+    if (broke) out.push(titled('broke'))
     // the bell closes the day; so does having nothing left to stake - the rest
     // of the day is forfeit and the desk sits it out
     if (bellDue(S) || broke) out.push(...endOfDay(S))
@@ -673,7 +699,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       S.coherence = clamp(fr, 0, 1)
     }
 
-    const out = [text(C.t('scenes.returns', {
+    const out = [titled('returns', {
       target: r.target, holding: C.holding(r.target, r.holdings),
       opened_at: money(quote(r.base, opened, R.price)), closed_at: money(quote(r.base, closed, R.price)),
       opened_reading: f0.toFixed(4), closed_reading: f1.toFixed(4),
@@ -689,7 +715,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       forced: Boolean(r.forced),
       coherence: S.coherence.toFixed(3), was_coherence: before.toFixed(3),
       drained: S.coherence < before - 0.3,
-    }))]
+    })]
     S.run = null
     return out
   }
@@ -756,9 +782,9 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     // their desk is not then read the brochure. Skipping the opening skips it too.
     const walkedIn = C.list('opening').some((id) => (S.seqSeen || []).includes(id))
     if (!walkedIn) {
-      out.push(text(C.t('scenes.welcome', {
+      out.push(titled('welcome', {
         worlds: S.allWorlds.length, skipped: 0, recharge: describeSteps(R.regenSteps),
-      })))
+      }))
     }
     out.push(...sceneMain(S), ...offerWorlds(S), ...story.fireBeat(C, S, beatCtx(S)))
     return result(S, out)
@@ -799,7 +825,8 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
 
     if (!cmd) return result(S, [text(C.t('prompts.say_something'))])
     if (['help', '?', '/help'].includes(cmd)) {
-      return result(S, [...story.narrate(C, S, helpScene()), text(C.t('prompts.help'))])
+      return result(S, [...story.narrate(C, S, helpScene()),
+                        text(C.t('prompts.help'), C.t('prompts.help_title'))])
     }
     if (['state', 'status', '/status', '/state'].includes(cmd)) return result(S, sceneStatus(S))
 

@@ -10,6 +10,12 @@
 // the moment and rejoin: the reply plays, then the scene carries on. There is
 // no branching to track.
 //
+// A node may also say who is talking and what heads the line: `voice: player`
+// for a line spoken by or about the player, and `title:` for a heading over
+// it. Both are for renderers that draw those distinctions - the browser puts
+// the player's lines down the other side of the page - and both are ignored by
+// one that does not. A choice may carry either, for its reply.
+//
 // BEATS (copy.yaml `beats:`) are setpieces keyed to a day of the probation
 // week. One fires once ever when its day begins. A beat with choices leaves
 // itself pending; it never interrupts anything, and a command that is not one
@@ -51,13 +57,37 @@ function nodeEmit (copy, S, node, tpl, { id = S.seq?.id ?? null, pace = true } =
   const body = typeof tpl === 'string' ? copy.render(tpl, ctx, `sequences.${id ?? '?'}`) : null
   const speaker = node.speaker ? copy.render(String(node.speaker), ctx) : null
   const timing = pace ? { pace: true, delay: sceneDelay(copy, id, node) } : { pace: false }
-  if (node.art) return [{ kind: 'art', art: String(node.art), speaker, text: body, ...timing }]
-  return body === null ? [] : [{ kind: 'text', speaker, text: body, ...timing }]
+  const marks = { ...voiceOf(node), ...titleOf(copy, ctx, node) }
+  if (node.art) return [{ kind: 'art', art: String(node.art), speaker, text: body, ...marks, ...timing }]
+  return body === null ? [] : [{ kind: 'text', speaker, text: body, ...marks, ...timing }]
 }
+
+/**
+ * Who a line belongs to, when the writer has said.
+ *
+ * A renderer that sets the two apart - the browser puts the player's side of
+ * the page opposite the game's - cannot tell them apart on its own: a scripted
+ * line about the player and a line of somebody else's narration are both text
+ * with no speaker on them. So `voice: player` is the writer's to set, and
+ * anything unmarked is the game talking, which is nearly everything.
+ */
+const voiceOf = (spec) => (spec && spec.voice ? { voice: String(spec.voice) } : {})
+
+/**
+ * A line's heading, when it has one.
+ *
+ * `title:` is set beside the text it heads, for a node that is a block rather
+ * than somebody talking. A speaker is a heading too - it is the name over a
+ * line of dialogue - and a node carrying both shows the SPEAKER: who is
+ * talking says more than the heading over what they said.
+ */
+const titleOf = (copy, ctx, spec) =>
+  (spec && spec.title ? { title: copy.render(String(spec.title), ctx) } : {})
 
 /** A beat's one line, timed the way a scene's node is. */
 const beatLine = (copy, id, spec, body) =>
-  ({ kind: 'text', text: body, pace: true, delay: sceneDelay(copy, id, spec) })
+  ({ kind: 'text', text: body, pace: true, delay: sceneDelay(copy, id, spec),
+     ...voiceOf(spec) })
 
 /**
  * Whatever the player typed, made safe to drop into a writer's line.
@@ -173,7 +203,8 @@ export function answerSequence (copy, S, raw) {
   S.seq.at += 1
   S.seq.awaiting = null
   const reply = nodeEmit(copy, S,
-    { speaker: choice.speaker, art: choice.art, delay: choice.delay }, choice.reply)
+    { speaker: choice.speaker, art: choice.art, delay: choice.delay,
+      voice: choice.voice, title: choice.title }, choice.reply)
   return [...reply, ...runSequence(copy, S)]
 }
 

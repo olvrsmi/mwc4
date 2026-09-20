@@ -223,11 +223,21 @@ export function createBot ({
     }
   }
 
-  /** Speaker and line, as the one string the markdown subset understands. */
+  /**
+   * Heading and line, as the one string the markdown subset understands.
+   *
+   * A chat message has one place a heading can go - the line above the body -
+   * so the two kinds share it. A speaker wins when a line has both: the name
+   * of whoever is talking says more than the heading over what they said.
+   * The browser has a title bar to put this in; here it is just a bold line,
+   * which is where these headings lived before either client had a field for
+   * them.
+   */
   const spoken = (e) => {
     const body = String(e.text ?? '')
-    if (!e.speaker) return body
-    return body.trim() ? `**${e.speaker}**\n${body}` : `**${e.speaker}**`
+    const head = e.speaker || e.title
+    if (!head) return body
+    return body.trim() ? `**${head}**\n${body}` : `**${head}**`
   }
 
   /**

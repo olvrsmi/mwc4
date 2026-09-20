@@ -60,6 +60,10 @@ async function walkScene (game, S, guard = 80) {
 }
 const texts = (r) => r.emissions.filter((e) => e.kind === 'text').map((e) => e.text)
 const has = (r, re) => texts(r).some((t) => re.test(t))
+// A block's heading travels beside its body rather than as the first line of
+// it, so what heads a message is asked for separately from what it says.
+const titles = (r) => r.emissions.filter((e) => e.kind === 'text').map((e) => e.title || '')
+const heads = (r, re) => titles(r).some((t) => re.test(t))
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47])
 
 // ---------------------------------------------------------------------------
@@ -105,7 +109,7 @@ section('the opening')
   ok('the opening completes, scenes chaining into one another', !story.inSequence(S) && last !== null)
   ok('every opening scene is marked seen', COPY.opening.every((id) => S.seqSeen.includes(id)), S.seqSeen.join())
   ok('then the game arrives with the day, and three worlds',
-     S.expect === 'world' && S.worlds.length === 3 && has(last, /\*\*Day 1\*\*/) &&
+     S.expect === 'world' && S.worlds.length === 3 && heads(last, /^Day 1$/) &&
      last.choices.filter((c) => /^[123]$/.test(c.token)).length === 3)
   ok('and the day names the week it is on the hook for',
      has(last, /7 days left of probation/) && has(last, /\u20ac\$3,500/) && has(last, /budget of \u20ac\$1,000/))
@@ -116,7 +120,7 @@ section('the opening')
   const { game: g2, S: S2 } = mk(92)
   await g2.start(S2)
   const sk = await g2.handle(S2, 'skip')
-  ok('skip ends the opening and starts the game', !story.inSequence(S2) && S2.expect === 'world' && has(sk, /\*\*Day 1\*\*/))
+  ok('skip ends the opening and starts the game', !story.inSequence(S2) && S2.expect === 'world' && heads(sk, /^Day 1$/))
   ok('a skipped opening is not read as the brochure either', !has(sk, /premier neo-market/))
 
   const { game: g3, S: S3 } = mk(93, {}, { copySource: { ...COPY, opening: [] } })
@@ -142,7 +146,7 @@ section('the offer and entering a world')
   const r = await game.handle(S, '1')
   ok('entering runs the first step and nothing else', S.world && S.world.readings.length === 1 && model.calls.length === 1 && model.calls[0].couple === null)
   ok('and shows the report, then a chart with nothing written under it',
-     has(r, /\*\*Report: /) && has(r, /corporate monopolisation/) &&
+     heads(r, /^Report: /) && has(r, /corporate monopolisation/) &&
      r.emissions.some((e) => e.kind === 'traces') && r.emissions.every((e) => !e.caption))
   ok('the report leads with the two percentages and closes on the holdings',
      /monopolisation[\s\S]*volatility[\s\S]*investment opportunit[\s\S]*unexposed|monopolisation[\s\S]*volatility[\s\S]*investment opportunit[\s\S]*exposed to/
@@ -220,7 +224,7 @@ section('a position: stake, hold, settle')
   r = await game.handle(S, 'h')
   ok('a third held step is just another reading - nothing was due', S.run && S.expect === 'holding')
   r = await game.handle(S, 'c')
-  ok('closing settles the position', S.run === null && has(r, /Returns/) && S.expect === 'world')
+  ok('closing settles the position', S.run === null && heads(r, /^Returns$/) && S.expect === 'world')
   ok('the balance stays a whole number', Number.isInteger(S.balance))
   ok('the qubit comes back changed', S.coherence < 1 && S.coherence > 0)
   ok('the next round is offered underneath, without re-opening the day',
@@ -236,7 +240,7 @@ section('closing early')
   await skipOpening(game, S)
   for (const t of ['1', 'i', '100', '0', 'h', 'h']) await game.handle(S, t)
   const r = await game.handle(S, 'c')
-  ok('closing early settles where it stands', S.run === null && has(r, /Returns/) && S.expect === 'world')
+  ok('closing early settles where it stands', S.run === null && heads(r, /^Returns$/) && S.expect === 'world')
   ok('and the day moved only for the held steps', S.dayStep === 2)
 
   const { game: g2, S: T } = mk(47)
@@ -259,9 +263,9 @@ section('the bell')
   await game.handle(S, 'h')
   const bell = await game.handle(S, 'h')
   ok('the bell closes the position where it stands', S.run === null && has(bell, /Closed early: EOD/))
-  ok('then the day', has(bell, /The Bell/) && S.dayIndex === 1 && S.dayStep === 0)
+  ok('then the day', heads(bell, /^The Bell$/) && S.dayIndex === 1 && S.dayStep === 0)
   ok('and only then the new day, on the new budget',
-     texts(bell).findIndex((t) => /The bell/.test(t)) < texts(bell).findIndex((t) => /\*\*Day 2\*\*/.test(t)) &&
+     titles(bell).findIndex((t) => /^The Bell$/.test(t)) < titles(bell).findIndex((t) => /^Day 2$/.test(t)) &&
      has(bell, /budget of \u20ac\$950/) && has(bell, /6 days left of probation/))
   ok('a day with a losing trade costs 5%', S.budget === 950)
 
@@ -347,7 +351,7 @@ section('probation')
   T.balance = T.budget + 500; T.investedToday = 1; T.dayStep = 26
   await g.handle(T, '1')
   const r = await g.handle(T, 'o')
-  ok('the verdict plays as a scene', has(r, /Seven days/) && has(r, /off probation/))
+  ok('the verdict plays as a scene', heads(r, /^Seven days\./) && has(r, /off probation/))
   ok('and the desk is off probation with the next week offered', !T.probation && (T.expect === 'world' || story.inSequence(T)))
 
   const { game: g2, S: F } = mk(6)
@@ -429,8 +433,8 @@ section('running out of money')
   S.world.readings[1][0] = dear.map((x) => -x)
   const r = await game.handle(S, 'c')
   ok('losing the last G says so', has(r, /out of money/) && S.balance >= 500)
-  ok('and the rest of the day is forfeit', has(r, /The Bell/) && S.dayIndex === 1 && S.dayStep === 0)
-  ok('with the next day offered', S.expect === 'world' && has(r, /\*\*Day 2\*\*/))
+  ok('and the rest of the day is forfeit', heads(r, /^The Bell$/) && S.dayIndex === 1 && S.dayStep === 0)
+  ok('with the next day offered', S.expect === 'world' && heads(r, /^Day 2$/))
 }
 
 // ---------------------------------------------------------------------------
@@ -439,7 +443,7 @@ section('the marketplace')
   const { game, S } = mk(60)
   await skipOpening(game, S)
   const m = await game.handle(S, 'm')
-  ok('the workshop opens from the offer', S.expect === 'market' && has(m, /workshop/) && has(m, /9 neo-hours/))
+  ok('the workshop opens from the offer', S.expect === 'market' && heads(m, /^The workshop$/) && has(m, /9 neo-hours/))
   await game.handle(S, 'b')
   const r = await game.handle(S, '3')
   ok('buying upgrades', S.regenUnits === 3 && S.balance === 970 && has(r, /3 bought/))
@@ -461,11 +465,11 @@ section('help and status')
   const h = await game.handle(S, 'help')
   const voice = (COPY.sequences[COPY.help_scene || HELP_SCENE] || []).length
   ok('help reads the voice out and lists the keys, touching nothing',
-     S.expect === 'holding' && has(h, /Commands/) && texts(h).length === voice + 1, `${texts(h).length} lines`)
+     S.expect === 'holding' && heads(h, /^Commands$/) && texts(h).length === voice + 1, `${texts(h).length} lines`)
   const st = await game.handle(S, 'state')
   ok('status is its own message, and reads the day back mid-position',
-     has(st, /\*\*Status\*\*/) && has(st, /It's day 1, \d+ neo-hours remaining/) &&
-     has(st, /Your balance is \u20ac\$/) && !has(st, /\*\*Day 1\*\*/) && S.expect === 'holding')
+     heads(st, /^Status$/) && has(st, /It's day 1, \d+ neo-hours remaining/) &&
+     has(st, /Your balance is \u20ac\$/) && !heads(st, /^Day 1$/) && S.expect === 'holding')
   const junk = await game.handle(S, 'xyz')
   ok('junk mid-position is nudged', has(junk, /\*\*h\*\* to hold/) && S.run !== null)
   const empty = await game.handle(S, '   ')

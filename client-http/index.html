@@ -5,37 +5,164 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mackenzie Walk Capital</title>
 <style>
+  /* A dealing floor read down one column. The game talks down the left, the
+     player and anything said about them answers down the right, and a picture
+     is the only thing that takes the whole width. See app.js for which is
+     which: it is the emission's own `voice`, not a guess made here. */
+  :root{
+    --col: 640px;      /* the column everything is measured against */
+    --msg: 380px;      /* and the widest a message inside it gets */
+    --bg: #000000;
+    --ink: #FFFFFF;
+    --btn: #373636;    /* a button is filled; nothing else on the page is */
+    --quiet: #909090;  /* the footer and the waiting, which are not the game */
+    --gap: 16px;       /* between every box, everywhere */
+    --pad-x: 12px;
+    --line: 18px;
+  }
+  /* Every width on this page is an outer width: a message is 380 including
+     its rule, because that is what the design measures. */
+  *, *::before, *::after{ box-sizing: border-box; }
   html, body{
     margin: 0;
     padding: 0;
-    background-color: #000000;
-    color: #FFFFFF;
+    background-color: var(--bg);
+    color: var(--ink);
   }
-  header, footer, #choices, #say, #account{
+  body{
+    font-family: "Times New Roman", Times, serif;
+    font-size: 16px;
+    line-height: var(--line);
+  }
+
+  /* The header is as it was. */
+  header{
     max-width: 40em;
     text-align: center;
     margin: 0 auto 0.5em;
   }
-  footer{
-    margin-top: 3em;
-  }
-  #account{
-    margin-top: 1.5em;
-    color: #909090;
-  }
-  /* the widget's iframe sits on its own line, centred with everything else */
-  #account iframe{
-    margin: 0.5em auto 0;
-    display: block;
-  }
+
   #log{
-    max-width: 40em;
+    max-width: calc(var(--col) + 32px);   /* 640 of column, plus a phone's gutter */
     margin: 0 auto;
+    padding: 0 16px;
   }
-  .msg { border: 1px solid; padding: 0.5em; margin: 0.5em 0;  }
+  #log > *{ margin-bottom: var(--gap); }
+  #log > *:first-child{ margin-top: var(--gap); }
+
+  /* ---- a message ------------------------------------------------------- */
+  .msg{ border: 1px solid var(--ink); }
+  /* the game's side: one width, whatever it has to say */
+  .msg.game{ width: min(var(--msg), 100%); margin-right: auto; }
+  /* the player's: only as wide as the words in it */
+  .msg.player{ width: fit-content; max-width: min(var(--msg), 100%); margin-left: auto; }
+  .msg .title{
+    font-weight: bold;
+    padding: 7px var(--pad-x);
+    border-bottom: 1px solid var(--ink);
+  }
+  .msg .body{ padding: 8px var(--pad-x); }
+
+  /* ---- a picture, and the sheet ---------------------------------------- */
+  /* Art is square and the column is not, so it sits letterboxed in a box that
+     is the full width either way. A chart keeps its own proportions - it is
+     drawn 1024 wide and reading it is the game - and opens full size on a
+     click, because the ladder and the footer do not survive the reduction. */
+  .shot{ border: 1px solid var(--ink); }
+  .shot a{ display: block; }
+  .shot img{ display: block; width: 100%; height: 336px; object-fit: contain; }
+  .shot.chart img{ height: auto; }
+  .shot .missing{ display: block; padding: 8px var(--pad-x); color: var(--quiet); }
+
+  /* ---- choices, and what a click leaves behind ------------------------- */
+  .choices{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: flex-end;
+  }
+  .btn{
+    font: inherit;
+    line-height: var(--line);
+    color: var(--ink);
+    background: var(--btn);
+    border: 1px solid var(--ink);
+    padding: 7px 24px;
+    text-align: center;
+    cursor: pointer;
+  }
+  .btn:hover:not(:disabled){ background: #4a4949; }
+  .btn:disabled{ opacity: .5; cursor: default; }
+  /* the button that was taken, left where it stood */
+  .echo{
+    width: fit-content;
+    max-width: 100%;
+    margin-left: auto;
+    background: var(--bg);
+    border: 1px solid var(--ink);
+    padding: 7px var(--pad-x);
+    font-style: italic;
+  }
+
   /* someone is still talking - see the pacing note in app.js */
-  .msg.typing { border-style: dashed; color: #909090; cursor: pointer; }
-  img { max-width: 100%; max-height: 33vh; margin: 0 auto 0.5em; }
+  .typing{
+    width: fit-content;
+    border: 1px dashed var(--ink);
+    color: var(--quiet);
+    padding: 8px var(--pad-x);
+    cursor: pointer;
+  }
+  .typing.player{ margin-left: auto; }
+
+  /* ---- the dock -------------------------------------------------------- */
+  /* The input is always reachable, so it is pinned rather than chased down a
+     transcript that grows all day. app.js keeps the page padded to clear it. */
+  #dock{
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    background: var(--bg);
+    padding: 16px;
+  }
+  #dock .inner{ max-width: var(--col); margin: 0 auto; }
+  #say{ display: flex; gap: 10px; }
+  #text{
+    flex: 1;
+    min-width: 0;
+    font: inherit;
+    line-height: var(--line);
+    color: var(--ink);
+    background: var(--bg);
+    border: 1px solid var(--ink);
+    padding: 7px var(--pad-x);
+  }
+  #text::placeholder{ color: var(--quiet); }
+  #text:disabled{ opacity: .5; }
+  /* the field is already a white box; the browser's own focus ring is a
+     colour this page does not otherwise have */
+  #text:focus{ outline: none; }
+  .btn:focus-visible{ outline: 1px solid var(--ink); outline-offset: 2px; }
+  #extra{
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  /* on a phone the sign-in line is long enough to squeeze the button onto two
+     lines; the button keeps its size and the words give way instead */
+  #reset{ flex: 0 0 auto; white-space: nowrap; }
+  #account{ flex: 1 1 auto; min-width: 0; color: var(--quiet); text-align: right; }
+  #account iframe{ margin: 0.5em 0 0 auto; display: block; }
+
+  /* Wide enough for margins beside the column: the two things that are not
+     the game leave the flow and take a corner each. Below that there is no
+     room beside it, so they stay in the dock under the input - start over on
+     the left, signing in on the right - and nothing overlaps anything. */
+  @media (min-width: 1000px){
+    #extra{ margin-top: 0; }
+    #reset{ position: fixed; bottom: 16px; right: 16px; }
+    #account{ position: fixed; top: 16px; right: 16px; max-width: 16em; }
+  }
 </style>
 </head>
 <body>
@@ -43,16 +170,22 @@
     <h1>Mackenzie Walk Capital</h1>
     <p id="status"></p>
   </header>
-<div id="log"></div>
-<div id="choices"></div>
-<form id="say">
-  <input id="text" type="text" autocomplete="off" spellcheck="false" placeholder="type a command, or help">
-  <button type="submit">send</button>
-</form>
-<footer>
-  <button id="reset" type="button">start over</button>
-  <div id="account"></div>
-</footer>
+
+  <div id="log"></div>
+
+  <div id="dock">
+    <div class="inner">
+      <form id="say">
+        <input id="text" type="text" autocomplete="off" spellcheck="false" placeholder="type a command, or help">
+        <button type="submit" class="btn">send</button>
+      </form>
+      <div id="extra">
+        <button id="reset" type="button" class="btn">start over</button>
+        <div id="account"></div>
+      </div>
+    </div>
+  </div>
+
 <script src="app.js" type="module"></script>
 </body>
 </html>

@@ -74,6 +74,13 @@ for (const f of sources) {
   const src = readFileSync(join(ROOT, f), 'utf8')
   for (const m of src.matchAll(/\.(?:t|list|pick)\(\s*'([\w.]+)'/g)) referenced.add(m[1])
   for (const m of src.matchAll(/\.t\(\s*[^)]*\?\s*'([\w.]+)'\s*:\s*'([\w.]+)'/g)) { referenced.add(m[1]); referenced.add(m[2]) }
+  // `titled('day_end', ...)` asks for two keys and spells out neither, so the
+  // scan above cannot see either one. Both are named here, or a block and its
+  // heading would read as stale the moment a play-through failed to reach them.
+  for (const m of src.matchAll(/\btitled\(\s*'([\w.]+)'/g)) {
+    referenced.add(`scenes.${m[1]}`)
+    referenced.add(`scenes.${m[1]}_title`)
+  }
 }
 const lookup = (k) => copy.section(k)
 for (const key of [...referenced].sort()) {

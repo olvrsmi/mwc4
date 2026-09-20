@@ -62,9 +62,11 @@ sequences:
 | field | |
 |---|---|
 | `art` | a name in `host/art/` - `png`, `jpg`, `webp` or `gif`. A name with no file plays as its line alone, so write before it is drawn |
-| `speaker` | who is talking; a renderer shows it bold above the line |
+| `speaker` | who is talking; a renderer shows it above the line |
+| `title` | a heading over the line, when it is a block rather than someone talking. A speaker wins over it |
 | `text` | what they say |
-| `choices` | keyed `a`, `b`, `c`… - **any number**. Each has a `label` and a `reply`, and may carry its own `art` and `speaker` |
+| `voice` | `player` for a line spoken by or about the player. See [Sides](#sides) |
+| `choices` | keyed `a`, `b`, `c`… - **any number**. Each has a `label` and a `reply`, and may carry its own `art`, `speaker`, `title` and `voice` |
 | `ask` | capture what the player types next into a named variable |
 | `delay` | seconds to wait before this line arrives - see [Timing](#timing) |
 
@@ -76,6 +78,57 @@ keyed rather than listed so copy-check can see inside them.
 Keep a key short. It is what a chat client puts inside a button, and Telegram
 caps that at 64 bytes and refuses the message rather than truncating, so
 `copy-check` fails a longer one for you. `a`, `b`, `c` are the convention.
+
+### Sides
+
+The browser puts the game down the left of the page and the player down the
+right. Nothing can work out which is which on its own - this,
+
+```yaml
+    - text: |
+        _[You follow Daniel to the lift.]_
+```
+
+and this,
+
+```yaml
+    - text: |
+        _ding_
+```
+
+are both a line with no speaker on it, and only one of them is about the
+player. So say so:
+
+```yaml
+    - voice: player
+      text: |
+        _[You follow Daniel to the lift.]_
+```
+
+Unmarked is the game talking, which is nearly every line. A choice may carry
+`voice: player` too, for a reply that narrates what the player just did. A
+renderer with only one column - the Telegram bot - ignores it entirely.
+
+### Headings
+
+The game's own blocks are headed rather than spoken, and the heading lives
+beside the body as `<key>_title`:
+
+```yaml
+scenes:
+  day_title: "Day {day}"
+  day: |
+    You have a budget of {budget}.
+```
+
+Both are rendered with the same values, so a heading can name what it heads.
+The browser draws it as a title bar across the top of the message; Telegram
+prints it as a bold line. Do not also write the heading as the first line of
+the body - it would then be said twice.
+
+A scene node uses `title:` for the same thing. A node with both a `title` and
+a `speaker` shows the speaker: the name of whoever is talking says more than
+the heading over what they said.
 
 ### Asking the player something
 
