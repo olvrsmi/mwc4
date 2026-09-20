@@ -318,6 +318,7 @@ function showLogin (botUsername) {
   s.setAttribute('data-userpic', 'false')
   s.setAttribute('data-request-access', 'write')
   s.setAttribute('data-onauth', 'onTelegramAuth(user)')
+  s.setAttribute('data-style', 'outlined')
   accountEl.appendChild(s)
   //accountEl.appendChild($msg)
 }
