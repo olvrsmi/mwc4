@@ -238,7 +238,10 @@ scenes:
   # is the coherence the next day block opens on.
   #
   # {elapsed} {gained} {recovered}
-  night: "_You head home. Night passes, on your desk your terminal runs its self-improving subroutines and recovers coherence._"
+  night: | 
+    _You head home._ 
+    
+    _Night passes, on your desk your terminal runs its self-improving subroutines, recovering coherence._"
 
 # One of these is chosen at random when a player writes during their own run.
 chatter:
@@ -252,10 +255,8 @@ prompts:
   unknown: "Type {options}."
   help_title: Commands
   help: |
-    `1` `2` `3` — enter a world · `m` — marketplace
-    `i` — invest · `o` — observe on · `l` — leave
-    `b` / `s` — buy or sell regeneration · `l` — leave the marketplace
-    When asked for a number, just type it.
+    `status` to see current time, funds and coherence
+    You can type any number, as well as selecting presets.
   say_something: Say something, or type **help**.
   # shown when a player types something a running scene has no answer for
   scene_waiting: _Someone is still talking. Answer them, or **skip**._
@@ -267,12 +268,14 @@ prompts:
 
 buttons:
   invest: Invest
-  observe: Observe
+  # `nh` is one neo-hour, the unit under `vocabulary.step` - one world step,
+  # which is exactly what either of these buys
+  observe: Observe for 1nh
   leave: Leave
   marketplace: Marketplace
   status: Status
   # new in 04: a position is stepped by hand and closed whenever the player says
-  hold: Hold
+  hold: Hold for 1nh
   close: Close position
   buy: Buy
   all_stake: "All {amount}"
@@ -688,7 +691,7 @@ sequences:
 
         On entering the market the terminal gives you a readout of its structure followed by a graph of the current standing of all entities.
 
-        You can invest straight away, observe the market's progress, or leave and choose another from the three. You must invest, MWC doesn't appreciate timidity.
+        You can invest straight away, observe the market's progress, or leave and choose another from the three. You must invest, MWC doesn't appreciate timidity. If you don't, you'll fail.
 
      
 
@@ -700,7 +703,7 @@ sequences:
 
         This coupling can change the outcome of the market, and skilled traders can sense when and how to invest even if the entity doesn't look clasically profitable.
 
-        The coupling also changes the state of your terminal, causing it to lose coherence and necessitating some recovery time, particularly from bad trades. The company has an internal marketplace you can purchase upgrades to the recovery process from.
+        The coupling also changes the state of your terminal, causing it to lose coherence and necessitating some recovery time, particularly from bad trades. The company has an internal marketplace from which you can purchase upgrades to the recovery process.
 
     - speaker: Disembodied Voice
       text: |
@@ -712,7 +715,7 @@ sequences:
         - you receive a {daily_budget} baseline daily budget 
         - if you end the day with a more than 10% profit your budget is increased by 10% the next day
         - if not, it's reduced by 5%
-        - you must make a profit of half of every budget you are handed that week - {week_target}, if nothing moves
+        - you must make a profit of 50% or more of your weekly total budget - {week_target} at baseline, but subject tochange as your budget does
         - if you fail you can keep trying, but normally only the nepo-hires have funds for that
 
   # --- the verdicts ---------------------------------------------------------

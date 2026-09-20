@@ -209,6 +209,26 @@ export function createSessions (host, {
   }
 
   /**
+   * What the player sent, as the transcript should remember it.
+   *
+   * A token means nothing on its own a week later - `a` was a lift button once
+   * - so it is recorded as the LABEL of whatever it answered, and as itself
+   * when it answered nothing (free text, an `ask`, a command typed out). The
+   * choices have to be read BEFORE the turn, because answering them is exactly
+   * what stops them being the ones on offer.
+   *
+   * It goes in the log and not into the turn's own emissions: a client showing
+   * a live turn has already put the player's move on screen its own way, and
+   * this is only for the reading back.
+   */
+  function saidBy (raw, offered) {
+    const said = String(raw ?? '').trim()
+    if (!said) return null
+    const hit = (offered || []).find((c) => String(c.token).toLowerCase() === said.toLowerCase())
+    return { kind: 'said', text: hit ? hit.label : said, delay: 0 }
+  }
+
+  /**
    * One token in, one turn out.
    *
    * A turn that throws must not leave the player staring at nothing: the error
@@ -220,6 +240,9 @@ export function createSessions (host, {
       const rec = await store.load(id)
       if (!rec) throw Object.assign(new Error('no such session'), { status: 404 })
       const S = rec.session
+      // before the turn moves: see saidBy. A game still in its opening has
+      // been asked nothing yet, so there is nothing for this to be an answer to
+      const said = S.expect === 'boot' ? null : saidBy(text, game.choices(S))
       let r
       try {
         r = await game.handle(S, text)
@@ -229,7 +252,7 @@ export function createSessions (host, {
         console.error(`  ${id}: turn failed:`, e?.stack || e?.message || e)
         const apology = [{ kind: 'text', text: game.copy.t('scenes.turn_failed') }]
         const failed = await deliver(id, apology, S).catch(() => [])
-        if (keepLog) rec.log.push(...failed)
+        if (keepLog) rec.log.push(...(said ? [said] : []), ...failed)
         await store.save(id, rec)
         return { emissions: failed, choices: game.choices(S), summary: game.summary(S), error: String(e?.message || e) }
       }
@@ -239,7 +262,7 @@ export function createSessions (host, {
       let emissions = []
       let undelivered = null
       try { emissions = await deliver(id, r.emissions, S) } catch (e) { undelivered = e }
-      if (keepLog) rec.log.push(...emissions)
+      if (keepLog) rec.log.push(...(said ? [said] : []), ...emissions)
       await store.save(id, rec)
       if (undelivered) throw undelivered
       return { emissions, choices: r.choices, summary: r.summary }

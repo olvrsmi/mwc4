@@ -84,6 +84,14 @@ const norm = (v) => Math.hypot(v[0], v[1], v[2])
  * for is simply absent from the emission.
  */
 const text = (t, title = null) => ({ kind: 'text', text: t, ...(title ? { title } : {}) })
+/**
+ * The same, voiced as the player's own.
+ *
+ * A scene node says this for itself with `voice: player` in copy.yaml; the
+ * game's own lines have no node to say it on, so the few that are the player's
+ * rather than the desk's are marked here.
+ */
+const playerText = (t) => ({ ...text(t), voice: 'player' })
 const num = (s) => {
   const v = Number(String(s).replace(/[, gG]/g, ''))
   return Number.isFinite(v) ? v : null
@@ -333,10 +341,10 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     // spends the night doing this, and going home is what ends a day
     // the player's own evening rather than the desk's - so it is voiced as
     // theirs, like the scripted lines that narrate what they did
-    out.push({ ...text(C.t('scenes.night', {
+    out.push(playerText(C.t('scenes.night', {
       elapsed: 'A night', gained: `coherence +${gained.toFixed(3)}`,
       recovered: gained > 0.0005,
-    })), voice: 'player' })
+    })))
     if (r.weekTotal !== null) {
       const ctx = {
         total: signedMoney(r.weekTotal), total_raw: r.weekTotal,
@@ -469,7 +477,8 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       return { info, name: names[i], holdings }
     })
     S.expect = 'world'
-    return [text(C.t('scenes.offer'))]
+    // the player turning to the terminal, not the terminal announcing itself
+    return [playerText(C.t('scenes.offer'))]
   }
 
   /** The numbers behind a chart. What is drawn is the quote, not the reading. */

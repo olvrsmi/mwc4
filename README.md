@@ -348,7 +348,14 @@ that widening a circuit in text - which the HTTP backend has to do, having no
 qiskit - builds the same circuit qiskit does.
 
 Sessions are one JSON file each under `host/state/`, named by subject, with the
-transcript the page replays on reload. Every chart is rendered once to
+transcript the page replays on reload. The transcript holds one thing the turn
+itself does not: a `{ kind: 'said', text }` entry for what the player sent,
+recorded as the LABEL of whatever it answered - `Call the lift` rather than
+`a`, which on its own means nothing a week later. It is written in
+`createSessions` rather than emitted by the game, because a client showing a
+live turn has already put the player's move on screen its own way; without it a
+transcript read back from disk is one side of a conversation, with the
+questions on it and none of the answers. Every chart is rendered once to
 `host/state/png/` and both clients are handed the same URL for it - Telegram
 uploads the bytes and puts the URL in the transcript, so a day played in the
 chat can be read back in the browser with its pictures. Charts older than

@@ -34,6 +34,10 @@ let busy = false
 let seen = null
 // The row of buttons waiting to be answered, until one of them is.
 let pending = null
+// and what they stand for, so a token TYPED rather than clicked echoes as the
+// same words the button would have - and as the same words the transcript
+// keeps, so a reload does not rewrite what the player saw themselves say
+let offered = []
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 
@@ -85,6 +89,9 @@ function expand (e) {
     return e.caption ? [sheet, { view: 'text', text: e.caption, delay: e.delay }] : [sheet]
   }
   if (e.kind === 'text') return [{ ...e, view: 'text' }]
+  // Only ever out of the transcript: a live turn has already resolved the
+  // button that was clicked into this, and a reload has no button to resolve.
+  if (e.kind === 'said') return [{ view: 'said', text: e.text, delay: 0 }]
   return [{ view: 'other', kind: e.kind, delay: e.delay }]
 }
 
@@ -129,6 +136,7 @@ function draw (v) {
   if (v.view === 'art') el = imageBox(v.url, v.art)
   else if (v.view === 'chart') el = imageBox(v.png, v.title || 'chart', { chart: true, full: v.png })
   else if (v.view === 'text') el = messageBox(v)
+  else if (v.view === 'said') { el = document.createElement('div'); el.appendChild(sayBox(v.text)) }
   else { el = document.createElement('div'); el.className = 'msg game'; el.textContent = `[${v.kind}]` }
   log.appendChild(el)
   return el
@@ -210,6 +218,7 @@ async function renderBurst (emissions) {
  */
 function renderChoices (list) {
   if (pending) { pending.remove(); pending = null }
+  offered = list || []
   if (!list || !list.length) return
   const row = document.createElement('div')
   row.className = 'choices'
@@ -228,11 +237,17 @@ function renderChoices (list) {
   pending = row
 }
 
-/** What the player just did, where they did it. */
-function echo (line) {
+/** What the player chose, as the box it is drawn in. */
+function sayBox (line) {
   const said = document.createElement('div')
   said.className = 'echo'
   said.textContent = `> ${line}`
+  return said
+}
+
+/** What the player just did, where they did it. */
+function echo (line) {
+  const said = sayBox(line)
   if (pending) {
     // the button that was taken, resolving into the answer it gave
     pending.className = ''
@@ -443,10 +458,17 @@ async function resync () {
 document.addEventListener('visibilitychange', resync)
 window.addEventListener('focus', resync)
 
+/** What a token is called, for a player who typed it instead of clicking it. */
+function labelFor (token) {
+  const t = String(token).trim().toLowerCase()
+  const hit = offered.find((c) => String(c.token).toLowerCase() === t)
+  return hit ? hit.label : token
+}
+
 async function say (token, label) {
   if (busy) return
   setBusy(true)
-  echo(label && label !== token ? `${label}` : token)
+  echo(label && label !== token ? `${label}` : labelFor(token))
   scroll()
   try {
     const r = await post('/api/say', { text: token })
