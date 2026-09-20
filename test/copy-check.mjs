@@ -22,6 +22,7 @@ import { createFakeModel } from '../core/fake-model.mjs'
 import * as story from '../core/story.mjs'
 import { DEFAULT_PACING } from '../core/pacing.mjs'
 import { loadSpecs } from '../host/specs.mjs'
+import { createBoard } from '../host/board.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const COPY_PATH = process.env.MW_COPY || join(ROOT, 'core', 'copy.yaml')
@@ -35,7 +36,10 @@ copy.record(true)
 
 // --- play through, so the common paths are all rendered at least once -------
 const specs = loadSpecs()
-const game = createGame({ copy, model: createFakeModel({ worlds: specs.worlds }) })
+// a real board with no file behind it, so the leaderboard's own keys are
+// rendered by the same code that renders them in a game
+const game = createGame({ copy, model: createFakeModel({ worlds: specs.worlds }),
+                          board: createBoard({ file: null }) })
 const S = game.newSession(11)
 await game.start(S)
 const walk = async () => {
@@ -67,6 +71,14 @@ if (asking) {
   S.beat = asking[0]; S.expect = 'beat'
   await say('zzz', Object.keys(asking[1].choices)[0])
 }
+await say('leaderboard')                                           // an empty board, read on probation
+// off probation, a day good enough to go on it
+S.probation = false
+S.vars.initials = 'OJS'
+S.week = [0, 0]; S.weekBudgets = [1000, 1000]
+S.balance = S.budget + 400; S.investedToday = 1; S.dayStep = 26
+await say('1', 'o')
+S.probation = true; S.week = []; S.weekBudgets = []
 // six days on the books, and a seventh that clears the week's target
 S.week = [700, 700, 700, 700, 700, 700]; S.weekBudgets = S.week.map(() => 1000)
 S.dayStep = 26; S.balance = S.budget + 500; S.investedToday = 1
@@ -82,7 +94,11 @@ const seen = copy.recorded
 // uses would otherwise read as stale and be deleted by the next writer.
 const sources = ['core/game.mjs', 'core/story.mjs', 'core/pricing.mjs', 'host/setup.mjs',
                  'client-http/server.mjs', 'client-telegram/bot.mjs']
+// `scenes.record_<what>` is built from the table a record was taken in, so the
+// scan below cannot see any of the three. Named here, or all three read as
+// stale the moment a play-through fails to take that particular record.
 const referenced = new Set(['opening', 'worlds', 'holdings', 'beats.schedule', 'beats.again', 'help_scene',
+                            'scenes.record_trade', 'scenes.record_day', 'scenes.record_week',
                             `sequences.${HELP}`, 'sequences.probation_passed', 'sequences.probation_failed'])
 for (const f of sources) {
   const src = readFileSync(join(ROOT, f), 'utf8')

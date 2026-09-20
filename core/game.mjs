@@ -51,6 +51,9 @@ import {
 import * as story from './story.mjs'
 import { withDelays } from './pacing.mjs'
 
+/** The three things the leaderboard tracks, in the order it shows them. */
+const TABLES = ['trade', 'day', 'week']
+
 export const DEFAULT_RULES = {
   // The horizon a world's advertised volatility is measured over, and nothing
   // else: a world runs until the day ends it. model/specs/_stats_cache.json is
@@ -111,7 +114,17 @@ const num = (s) => {
   return Number.isFinite(v) ? v : null
 }
 
-export function createGame ({ copy, model, rules = {}, random = Math.random } = {}) {
+/**
+ * The leaderboard, when nobody injects one.
+ *
+ * A board is shared state on a disk and core/ owns none, so it arrives the way
+ * the physics does: injected, and spoken to through two methods. This stands in
+ * when it is absent - a dry run, a test, a host that does not want one - and
+ * the game plays exactly as it does with a board that nobody is on.
+ */
+const NO_BOARD = { top: () => ({ trade: [], day: [], week: [] }), post: () => ({}) }
+
+export function createGame ({ copy, model, board = NO_BOARD, rules = {}, random = Math.random } = {}) {
   if (!copy) throw new Error('createGame: copy is required')
   if (!model) throw new Error('createGame: model is required')
   const R = { ...DEFAULT_RULES, ...rules, price: { ...DEFAULT_PRICE, ...(rules.price || {}) } }
@@ -378,6 +391,9 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
 
   /** The bell: the books, the night, the week if it is over, and the new day's beat. */
   function endOfDay (S) {
+    // read before the books are closed: passing probation is the last thing a
+    // probation week does, and the week that did it does not go on the board
+    const wasProbation = S.probation
     const r = closeDay(S)
     const out = [titled('day_end', {
       day: r.day,
@@ -388,6 +404,9 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       floored: r.next === R.budgetFloor,
       floor: money(R.budgetFloor),
     })]
+    // the day, and the week when one has just ended, offered together - a
+    // seventh day that was the best of both takes the two rows in one breath
+    const took = offerRecords(S, { day: r.pl, week: r.weekTotal ?? 0 }, { probation: wasProbation })
     const gained = regen(S, R.nightSteps)
     // said whether or not anything came back: a terminal already clean still
     // spends the night doing this, and going home is what ends a day
@@ -397,6 +416,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       elapsed: 'A night', gained: `coherence +${gained.toFixed(3)}`,
       recovered: gained > 0.0005,
     })))
+    out.push(...tookAPlace(S, took))
     if (r.weekTotal !== null) {
       const ctx = {
         total: signedMoney(r.weekTotal), total_raw: r.weekTotal,
@@ -629,6 +649,64 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
                             clean: ghost(S), title: runningTitle(S, pct(mult)) })
   }
 
+  /**
+   * The leaderboard, as three tables of three.
+   *
+   * The figures are padded here rather than in copy.yaml because what they are
+   * padded TO is the widest of the nine, which no template can see. A row is
+   * the writer's otherwise - it is their backticks that make it monospace, and
+   * a proportional font would throw the columns away however they were padded.
+   */
+  function sceneBoard (S) {
+    const top = board.top()
+    const all = [...top.trade, ...top.day, ...top.week]
+    const width = Math.max(0, ...all.map((r) => money(r.amount).length))
+    const table = (key) => {
+      const list = top[key] || []
+      if (!list.length) return C.t('scenes.leaderboard_empty')
+      return list
+        .map((r, i) => C.t('scenes.leaderboard_row', {
+          place: i + 1, amount: money(r.amount).padEnd(width), amount_raw: r.amount,
+          name: r.name,
+        }))
+        .join('\n')
+    }
+    return [titled('leaderboard', {
+      trades: table('trade'), days: table('day'), weeks: table('week'),
+      empty: all.length === 0,
+      probation: S.probation,
+      places: board.keep ?? 3,
+    })]
+  }
+
+  /**
+   * What a turn just put on the board, said where it happened.
+   *
+   * Only ever after a record was actually taken, which is rare enough that it
+   * can afford to bring the whole table with it - and the table is the only
+   * thing that says what the figure beat.
+   */
+  function tookAPlace (S, took) {
+    const what = TABLES.find((t) => took[t])
+    if (!what) return []
+    return [text(C.t('scenes.record', {
+      what: C.t(`scenes.record_${what}`), place: took[what], first: took[what] === 1,
+    })), ...sceneBoard(S)]
+  }
+
+  /**
+   * Offer the board what this turn was worth, if this desk may be on it.
+   *
+   * Probation is the gate, and it is read where the event happened rather than
+   * after: the week that carries a desk off probation is still a probation
+   * week, and so is the day that ends it.
+   */
+  function offerRecords (S, entries, { probation = S.probation } = {}) {
+    if (probation) return {}
+    const name = (S.vars || {}).initials
+    return name ? board.post(name, entries) : {}
+  }
+
   function sceneMarket (S) {
     S.expect = 'market'
     const recovering = S.coherence < 0.999
@@ -795,6 +873,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       drained: S.coherence < before - 0.3,
     })]
     S.run = null
+    out.push(...tookAPlace(S, offerRecords(S, { trade: profit })))
     return out
   }
 
@@ -980,6 +1059,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     // An hour spent on nothing, from wherever the player is standing. It is the
     // only way the clock moves without a world moving with it, and the only way
     // a spent terminal cleans up that does not cost a world's readouts.
+    if (['leaderboard', 'board', '/leaderboard'].includes(cmd)) return result(S, sceneBoard(S))
     if (['wait', '/wait'].includes(cmd)) {
       // Not with a position open. The coupling is what spends the terminal and
       // it runs for exactly as long as the position does, so an hour of it
@@ -1125,6 +1205,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
           push(`${i + 1}`, C.t('buttons.world', { index: i + 1, world: w.name, opportunities: w.info.n })))
         push('wait', C.t('buttons.wait'))
         push('m', C.t('buttons.marketplace'))
+        push('leaderboard', C.t('buttons.leaderboard'))
         break
       case 'invest':
         push('i', C.t('buttons.invest'))
@@ -1173,5 +1254,6 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     get copy () { return C },
     // the pieces, for tests and other hosts
     closeDay, endOfDay, regen, regenRate, describeSteps, stepsLeft, bellDue, sceneMain, offerWorlds,
+    sceneBoard,
   }
 }

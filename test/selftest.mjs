@@ -24,6 +24,7 @@ import { widenQasm, blankQasm, qubitCount } from '../host/qasm.mjs'
 import { createHttpModel } from '../host/model-http.mjs'
 import { renderEmission } from '../host/render.mjs'
 import { createStore } from '../host/store.mjs'
+import { createBoard, MAX_NAME } from '../host/board.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const COPY = parseYaml(readFileSync(join(ROOT, 'core', 'copy.yaml'), 'utf8'))
@@ -39,11 +40,11 @@ const ok = (name, cond, detail = '') => {
 const section = (name) => console.log(`\n  -- ${name}`)
 const throws = async (fn) => { try { await fn(); return false } catch { return true } }
 
-function mk (seed = 7, rules = {}, { worlds = specs.worlds, copySource = COPY } = {}) {
+function mk (seed = 7, rules = {}, { worlds = specs.worlds, copySource = COPY, board } = {}) {
   const copy = createCopy(copySource, { random: () => 0 })     // lists pick their first line
   const model = createFakeModel({ worlds, steps: rules.steps ?? 10 })
-  const game = createGame({ copy, model, rules })
-  return { game, S: game.newSession(seed), model, copy }
+  const game = createGame({ copy, model, board, rules })
+  return { game, S: game.newSession(seed), model, copy, board }
 }
 async function skipOpening (game, S) {
   await game.start(S)
@@ -1009,6 +1010,97 @@ section('the http backend, against a stand-in for the Moth API')
   const bad = createHttpModel({ specs: specs.specs, worlds: specs.worlds, key: 'wrong', api: `http://localhost:${port}`, pollMs: { first: 1, max: 5 } })
   ok('a rejected key surfaces as an error', await throws(() => bad.check()))
   srv.close()
+}
+
+// ---------------------------------------------------------------------------
+section('the leaderboard')
+{
+  let clock = 0
+  const fresh = () => createBoard({ file: null, now: () => ++clock })
+
+  const b = fresh()
+  ok('an empty board has three empty tables',
+     ['trade', 'day', 'week'].every((t) => b.top()[t].length === 0))
+  ok('and takes a first record', b.post('OJS', { trade: 400 }).trade === 1)
+  ok('a bigger one takes the top and pushes the other down',
+     b.post('N4ME', { trade: 900 }).trade === 1 && b.top().trade.map((r) => r.name).join() === 'N4ME,OJS')
+  b.post('C', { trade: 600 }); b.post('D', { trade: 700 })
+  ok('only the best three are kept, in order',
+     b.top().trade.map((r) => r.amount).join() === '900,700,600', JSON.stringify(b.top().trade))
+  ok('and a figure that beats none of them takes nothing', b.post('E', { trade: 10 }).trade === null)
+
+  // one player, three rows: the board is a record of the best things that
+  // happened, not a register of who is playing
+  const many = fresh()
+  for (const a of [500, 400, 300]) many.post('OJS', { trade: a })
+  ok('one player can hold the whole table',
+     many.top().trade.length === 3 && many.top().trade.every((r) => r.name === 'OJS'))
+
+  const tie = fresh()
+  tie.post('FIRST', { trade: 100 })
+  ok('a tie does not displace the row already there',
+     tie.post('SECOND', { trade: 100 }).trade === 2 && tie.top().trade[0].name === 'FIRST')
+
+  const junk = fresh()
+  ok('a loss is not a record', junk.post('OJS', { trade: -50 }).trade === null)
+  ok('nor is nothing at all', junk.post('OJS', { trade: 0 }).trade === null)
+  ok('and a nameless desk cannot be on it', junk.post('', { trade: 900 }).trade === null)
+  junk.post('  a\u202Eb`*_c'.repeat(9), { trade: 900 })
+  ok('a name is stripped and cut at the boundary, not only where it was typed',
+     (() => { const n = junk.top().trade[0].name
+              return [...n].length <= MAX_NAME && !/[`*_\u202E]/.test(n) })(),
+     JSON.stringify(junk.top().trade[0]?.name))
+
+  // the three tables are their own
+  const three = fresh()
+  three.post('OJS', { trade: 10, day: 20, week: 30 })
+  ok('a turn can take a place in each', three.top().trade[0].amount === 10 &&
+     three.top().day[0].amount === 20 && three.top().week[0].amount === 30)
+
+  // --- and what the game does with it --------------------------------------
+  const { game, S, board } = mk(200, {}, { board: fresh() })
+  await skipOpening(game, S)
+  S.vars.initials = 'OJS'
+  const empty = await game.handle(S, 'leaderboard')
+  ok('the board can be read on probation', heads(empty, /^Top Traders$/) && has(empty, /Highest Single Profit/))
+  ok('and says the desk cannot be on it yet', has(empty, /Pass probation/))
+
+  S.balance = S.budget + 400; S.investedToday = 1; S.dayStep = 26
+  await game.handle(S, '1')
+  await game.handle(S, 'o')
+  ok('a probation day is not a record, however good', board.top().day.length === 0,
+     JSON.stringify(board.top().day))
+
+  const { game: g2, S: T, board: b2 } = mk(201, {}, { board: fresh() })
+  await skipOpening(g2, T)
+  T.vars.initials = 'OJS'
+  T.probation = false
+  T.balance = T.budget + 400; T.investedToday = 1; T.dayStep = 26
+  await g2.handle(T, '1')
+  const bell = await g2.handle(T, 'o')
+  ok('a day off probation goes on the board', b2.top().day[0]?.amount === 400 && b2.top().day[0]?.name === 'OJS',
+     JSON.stringify(b2.top().day))
+  ok('and it is said where it happened, with the table under it',
+     has(bell, /record day/i) && heads(bell, /^Top Traders$/))
+
+  // the week that carries a desk off probation is still a probation week
+  const { game: g3, S: U, board: b3 } = mk(202, {}, { board: fresh() })
+  await skipOpening(g3, U)
+  U.vars.initials = 'OJS'
+  U.week = [700, 700, 700, 700, 700, 700]; U.weekBudgets = U.week.map(() => 1000)
+  U.balance = U.budget + 500; U.investedToday = 1; U.dayStep = 26
+  await g3.handle(U, '1')
+  await g3.handle(U, 'o')
+  ok('the week that passes probation is not on the board',
+     U.probation === false && b3.top().week.length === 0 && b3.top().day.length === 0,
+     JSON.stringify(b3.top()))
+
+  const { game: g4, S: V } = mk(203)
+  await skipOpening(g4, V)
+  const none = await g4.handle(V, 'leaderboard')
+  ok('a game with no board injected still answers for one',
+     heads(none, /^Top Traders$/) && V.expect === 'world')
+  ok('and the offer carries the button', g4.choices(V).some((c) => c.token === 'leaderboard'))
 }
 
 // ---------------------------------------------------------------------------

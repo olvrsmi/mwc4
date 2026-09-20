@@ -115,9 +115,18 @@ export function createStore (dir, { keepLog = 300, keepLive = Number(process.env
     forget (id) { live.delete(id) },
     /** How many games are held in memory. For tests and for the doctor. */
     get cached () { return live.size },
+    /**
+     * Every saved game in the directory.
+     *
+     * A leading underscore is the host's own: the leaderboard lives in here
+     * too, and a subject can never begin with one - see validSubject - so the
+     * prefix is a safe way to keep the shared files out of a list of players.
+     */
     async ids () {
       if (!existsSync(dir)) return []
-      return (await readdir(dir)).filter((n) => n.endsWith('.json')).map((n) => n.slice(0, -5))
+      return (await readdir(dir))
+        .filter((n) => n.endsWith('.json') && !n.startsWith('_'))
+        .map((n) => n.slice(0, -5))
     },
   }
 }

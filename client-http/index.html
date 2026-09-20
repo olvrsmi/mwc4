@@ -35,6 +35,15 @@
     line-height: var(--line);
   }
 
+  /* A `code` span is the only monospace on the page, and the only thing that
+     keeps its own spacing: the leaderboard pads its figures into columns, and
+     HTML would otherwise close every run of spaces up to one. */
+  code{
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.92em;
+    white-space: pre;
+  }
+
   /* The header is as it was. */
   header{
     max-width: calc(var(--col) + 32px);     
@@ -212,7 +221,7 @@
   <header>
     <div id="title">
       <h1>Mackenzie Walk Capital</h1>
-      <div>[beta] v0.5.11</div>
+      <div>[beta] v0.5.17</div>
     </div>
     <p id="status"></p>
   </header>
@@ -222,7 +231,7 @@
   <div id="dock">
     <div class="inner">
       <form id="say">
-        <input id="text" type="text" autocomplete="off" spellcheck="false" placeholder="type a command, or help">
+        <input id="text" type="text" autocomplete="off" spellcheck="false" placeholder="type a command. try help, status, wait...">
         <button type="submit" class="btn">send</button>
       </form>
       <div id="extra">

@@ -11,7 +11,8 @@
 //
 //   MW_MODEL          local | fake | http           (default local)
 //   MW_COPY           where copy.yaml lives
-//   MW_STATE_DIR      where saved games live
+//   MW_STATE_DIR      where saved games live, the leaderboard among them
+//   MW_LEADERBOARD    0 turns it off; a path puts it somewhere else
 //   plus the rule dials, all listed in .env.example
 
 import './env.mjs'   // must come first: it fills process.env for the rest
@@ -28,6 +29,7 @@ import { loadSpecs } from './specs.mjs'
 import { createLocalModel } from './model-local.mjs'
 import { createHttpModel, resolveMothKey } from './model-http.mjs'
 import { createStore } from './store.mjs'
+import { createBoard, boardFile } from './board.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 export const ROOT = resolve(HERE, '..')
@@ -55,6 +57,19 @@ export function readRules () {
     nightSteps: envNum('MW_NIGHT_STEPS', 9),
     counterfactual: process.env.MW_COUNTERFACTUAL !== '0',
   }
+}
+
+/**
+ * Where the leaderboard lives, or nowhere.
+ *
+ * `MW_LEADERBOARD=0` gives a board with no file behind it: it still works for
+ * the length of a process and is forgotten on restart, which is what a local
+ * run usually wants.
+ */
+export function readBoardOptions () {
+  const v = process.env.MW_LEADERBOARD
+  if (v === '0') return { file: null }
+  return { file: v || boardFile(STATE_DIR) }
 }
 
 /** copy.yaml, parsed and wrapped. Throws if the file is unreadable. */
@@ -90,7 +105,10 @@ export function createHost ({ model: kind = process.env.MW_MODEL || 'local', wat
   const loaded = loadSpecs({ steps: rules.steps })
   const copy = readCopy()
   const model = buildModel(kind, loaded, rules)
-  const game = createGame({ copy, model, rules })
+  // Shared by every player and by both clients, which is why it is built here
+  // with everything else that is common rather than by whoever asks first.
+  const board = createBoard(readBoardOptions())
+  const game = createGame({ copy, model, board, rules })
   const store = createStore(STATE_DIR)
 
   if (watch) {
@@ -100,7 +118,8 @@ export function createHost ({ model: kind = process.env.MW_MODEL || 'local', wat
       }
     })
   }
-  return { rules, loaded, copy, model, game, store, paths: { ROOT, ART, COPY_PATH, STATE_DIR } }
+  return { rules, loaded, copy, model, board, game, store,
+           paths: { ROOT, ART, COPY_PATH, STATE_DIR } }
 }
 
 /** The same few lines of standing every client prints on the way up. */
@@ -114,6 +133,10 @@ export function printBanner (host, what) {
   console.log(`  model    ${model.name}${model.info ? ' ' + JSON.stringify(model.info()) : ''}`)
   console.log(`  day      ${rules.daySteps} steps of ${rules.steps - 1} per world · week ${rules.weekDays} days`)
   console.log(`  state    ${STATE_DIR}`)
+  console.log(`  board    ${host.board.file || 'in memory only'}` +
+              (() => { const t = host.board.top()
+                       const n = t.trade.length + t.day.length + t.week.length
+                       return n ? `, ${n} record(s)` : ', empty' })())
   if (model.check) {
     model.check()
       .then((c) => console.log(`  moth     engine ${c.engine_id} ${c.enabled ? 'enabled' : 'DISABLED'}, ${c.credits_per_run} credit(s) a step`))

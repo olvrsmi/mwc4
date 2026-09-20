@@ -58,6 +58,7 @@ mackenziewalk_04/
     model-http.mjs   the physics via the Moth API's qdrive-api-v1 engine
     render.mjs       a traces emission drawn as a PNG, and the art lookup
     store.mjs        one JSON file per session
+    board.mjs        the leaderboard: one file, shared by everybody
     mirror.mjs       a browser turn said again in the chat, when both are on
     art/ fonts/      pictures the scenes name; the chart's typefaces
   client-http/     a web page. server.mjs, index.html, app.js
@@ -181,6 +182,32 @@ long as the player keeps holding, and closes when they say so. Left open, it
 closes itself at the world's last readout, or where it stands when the bell
 rings.
 
+## The leaderboard
+
+Three tables of three: the highest single profit, the most profitable day and
+the most profitable week the floor has ever seen. It is keyed by the FIGURE
+rather than by the player, so one very good week can take all three rows of a
+table - it is a record of the best things that have happened, not a register of
+who is playing.
+
+A desk on probation can read it and cannot be on it. The gate is read where the
+event happened rather than after the books close, so the week that carries a
+desk off probation is still a probation week and does not go on the board;
+entries begin the day after.
+
+The name on a row is the one the player typed on their way in - Daniel's
+lanyard, in the opening - which makes it the one place in the game where one
+player's words reach another player's screen. It is stripped and capped where
+it is captured and again in `host/board.mjs`, because the second of those is
+the boundary that matters: a hand-edited save would otherwise put whatever it
+liked in front of everybody.
+
+It lives at `host/state/_leaderboard.json`, shared by the browser and the chat.
+Everything else in this repository belongs to one player and is written by one
+queue; this is the exception, so it is held in memory, read synchronously - the
+game reads it, and a pure state machine cannot wait on a disk - and written
+behind on a single promise chain. `MW_LEADERBOARD=0` keeps it in memory only.
+
 ## Playing
 
 Every choice arrives as a button and as a token you could have typed instead,
@@ -194,6 +221,7 @@ so free text keeps working.
 | `h` `c` | hold one more step, or close where it stands |
 | `b` `l` | buy hours of recovery, or leave the workshop |
 | `wait` | let one step pass with nothing in it, anywhere but mid-position |
+| `leaderboard` | the floor's best three, also `board` and a button on the offer |
 | `help` `state` | the rules read out again, and your standing; either works mid-position |
 | `skip` | end the opening scenes |
 
@@ -304,8 +332,9 @@ degrades one message; it never stops a turn.
 
 ## How the pieces fit
 
-`core/game.mjs` exports `createGame({ copy, model, rules })`. The game holds
-no timers, reads no files and draws nothing:
+`core/game.mjs` exports `createGame({ copy, model, board, rules })`. The game
+holds no timers, reads no files and draws nothing - `board` is an injected port
+like `model` is, with `top()` and `post()`, and the game plays without one:
 
 ```js
 const game = createGame({ copy, model })
@@ -376,8 +405,10 @@ checks that a world stepped in ten processes is the world stepped in one, and
 that widening a circuit in text - which the HTTP backend has to do, having no
 qiskit - builds the same circuit qiskit does.
 
-Sessions are one JSON file each under `host/state/`, named by subject, with the
-transcript the page replays on reload. The transcript holds one thing the turn
+Sessions are one JSON file each under `host/state/`, named by subject - a name
+beginning with `_` is the host's own and never a player's, which is how the
+leaderboard sits in the same directory without being mistaken for a game. Each
+holds the session and the transcript the page replays on reload. The transcript holds one thing the turn
 itself does not: a `{ kind: 'said', text }` entry for what the player sent,
 recorded as the LABEL of whatever it answered - `Call the lift` rather than
 `a`, which on its own means nothing a week later. It is written in
@@ -396,7 +427,8 @@ All optional, all in `.env.example`: `MW_STEPS` (10, the horizon volatility is
 measured over), `MW_CHART_READOUTS` (15), `MW_DAY_STEPS` (27),
 `MW_WEEK_DAYS` (7), `MW_REGEN_STEPS` (9),
 `MW_NIGHT_STEPS` (9), `MW_START_BUDGET`, `MW_BUDGET_FLOOR`, `MW_QUOTA`,
-`MW_WEEK_BONUS`, `MW_UPGRADE_COST` (€$10 an hour), `MW_PROBATION`, `MW_PROBATION_SHARE`,
+`MW_WEEK_BONUS`, `MW_UPGRADE_COST` (€$10 an hour), `MW_LEADERBOARD`,
+`MW_PROBATION`, `MW_PROBATION_SHARE`,
 `MW_COUNTERFACTUAL`, `PORT`, `MW_BIND`, `MW_STATE_DIR`, `MW_SECRET`,
 `MW_BOT_USERNAME`, `MW_PUBLIC_URL`, `MW_TRUST_PROXY`, `MW_SWEEP_DAYS`.
 
