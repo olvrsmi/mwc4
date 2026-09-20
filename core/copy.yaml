@@ -312,7 +312,7 @@ scenes:
   night: | 
     _You leave the office._ 
     
-    _Night passes, on your desk your terminal runs its self-improving subroutines, recovering coherence._"
+    _Night passes, on your desk your terminal runs its self-improving subroutines, recovering coherence._
 
 # One of these is chosen at random when a player writes during their own run.
 chatter:
@@ -329,7 +329,7 @@ prompts:
     `wait` to let a neo-hour pass and let your terminal clean up
     `leaderboard` to see the floor's best three
     You can type any number, as well as selecting presets.
-  say_something: typea a command, try **help**, **status**, **wait**...
+  say_something: type a command, try **help**, **status**, **wait**...
   # shown when a player types something a running scene has no answer for
   scene_waiting: _Someone is still talking. Answer them, or **skip**._
   # The same, where the scene is waiting on something typed rather than
@@ -761,9 +761,9 @@ sequences:
 
     - speaker: Lara + Martin
       text: |
-        When we started Mackenzie Walk Capital we had nothing but a dream, a huge roster of investors enamoured with youth from our time at Jane Street and Goldman Sachs, and a willingness to Do What It Takes.
+        When we started Mackenzie Walk Capital we had nothing but a dream, a huge roster of investors enamoured with youth from our time at Jane Street and Goldman Sachs, and a deep conviction that As Below, So Above.
         
-        We look forward to meeting you after your first week, in our scheduled, new starter 37 second catch up. Remember, Do What It Takes!
+        We look forward to meeting you after your first week, in our scheduled, new starter 37 second catch up. Remember, there are No Negative Externalities!
 
     - art: oldhead
       speaker: Navinder
@@ -843,17 +843,81 @@ sequences:
   probation_passed:
     - title: "Seven days. {total}."
       text: |
-        You are off probation. The desk is yours.
+        ... the founders are calling
+    - voice: player
+      text: |
+        you face the camera and smile, but not too much
+    - art: founders
+      speaker: Martin
+      text: |
+        "Hi!"
+    - speaker: Lara
+      text: |
+        Hey! Welcome to the team...
+
+        For real this time!
+    - speaker: Martin + Lara
+      text: |
+        We have to admit we weren't sure you'd make it, but well done. We've got a good feeling about how much money you're going to make this company.
+    - speaker: Martin
+      text: |
+        "We'll keep an eye on it, of course. Best thing to aim for is to get your self on our Top Traders list so we can see you're really a good culture fit."
+    - speaker: Martin + Lara
+      text: |
+        Good Luck!
+      choices:
+        a:
+          label: thank you!
+          voice: player
+          reply: |
+            _you relax, once the call's over and notice that your screen is now slightly convex... _
+        b:
+          label: thanks so much
+          voice: player
+          reply: |
+            _you hold the smile until the call is over. Is the edge of your desk inside out, or have you just had too much screen time?_
+        
 
   probation_failed:
     - title: "Seven days. {total}."
+      text: 
+        ... the founders are calling?
+    - voice: player
       text: |
-        Not a profitable week, so not yet a desk. You start again on {budget}{#if again} — attempt {attempt}{/if}.
+        you try to think of an excuse, maybe you can blame Navinder?
+    - art: founders
+      speaker: Martin + Lara
+      text: |
+        As below, so above. But if you’re that far below you’ll never make an impact.
+        
+        We'll make this quick. That was not a profitable week, but we're extending your probation. You have one more week.
+        
+        You start again on {budget}{#if again} — attempt {attempt}{/if}.
+      choices:
+        a:
+          label: Express appreciation
+          voice: player
+          reply: |
+            _they've already gone _       
 
-        Your qubit is where you left it, at {coherence}. That much is yours.
 
   # Shorter, for the second failure onward. Empty until it is written.
-  probation_failed_again: []
+  probation_failed_again: 
+    - title: "Seven days. {total}."
+      text: |
+        ... the founders are calling?
+
+        No, not this time. That was dismal. There's just a notification on your screen.
+    - title: "Notification."
+      text: |
+        {#if again}Attempt {attempt}{/if}. You start again next week on {budget}.
+      choices:
+        a:
+          label: Dismiss Notification
+          voice: player
+          reply: |
+            _...back again tomorrow_     
+
 
   # Navinder again, once the voice has finished. Its own scene only because
   # the voice between them is one - see the note above `voice`.
