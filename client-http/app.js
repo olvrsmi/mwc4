@@ -306,7 +306,10 @@ function trouble (line) {
 
 /** The Login Widget, which will only render on the domain BotFather was told. */
 function showLogin (botUsername) {
-  accountEl.innerHTML = '<small>Playing as a guest. Sign in to carry this game on in Telegram.</small>'
+  const msg = `Playing as a guest. Sign in to carry this game on in Telegram.`
+  const $msg = document.createElement('small');
+  $msg.innerHTML = msg;
+  accountEl.innerHTML = ''
   const s = document.createElement('script')
   s.async = true
   s.src = 'https://telegram.org/js/telegram-widget.js?22'
@@ -316,13 +319,18 @@ function showLogin (botUsername) {
   s.setAttribute('data-request-access', 'write')
   s.setAttribute('data-onauth', 'onTelegramAuth(user)')
   accountEl.appendChild(s)
+  accountEl.appendChild($msg)
 }
 
 function showAccount (r) {
   accountEl.innerHTML = ''
   if (r.kind === 'telegram') {
     const who = r.name ? `Signed in as ${esc(r.name)}` : 'Signed in with Telegram'
-    accountEl.innerHTML = `<small>${who}. This game is waiting for you in the chat too.</small><br>`
+
+    const msg = `${who}. This game is waiting for you in the chat.`
+    const $msg = document.createElement('small');
+
+    accountEl.innerHTML = ``
     const out = document.createElement('button')
     out.type = 'button'
     out.className = 'btn'
@@ -333,6 +341,7 @@ function showAccount (r) {
       try { await show(await post('/api/auth/logout')) } finally { setBusy(false) }
     }
     accountEl.appendChild(out)
+    accountEl.appendChild($msg)
     return
   }
   if (r.canLogin && r.botUsername) showLogin(r.botUsername)
