@@ -172,9 +172,9 @@ scenes:
     _Closed early: EOD._{/if}
 
   # {balance}
-  ask_stake: "How much do you stake? (1 – {balance})"
+  ask_stake: "How much do you invest? (1 – {balance})"
   # {last}
-  ask_target: "Couple to which holding? (0 – {last})"
+  ask_target: "Invest in which entity? (0 – {last})"
   ask_units: How many upgrades?
 
   left: You leave before anything is committed.
@@ -194,20 +194,21 @@ scenes:
   # exactly as long as the position does, so an hour of it cannot be sat out.
   cannot_wait: "Your position is open — time only moves while you hold it."
 
-  broke_title: The walk ends here
+  broke_title: Budget depleted
   broke: You are out of money.
-  nothing_to_stake: You have nothing left to stake.
-  turn_failed: Something went wrong at this end and your last move was lost. Send anything to pick up where you were.
+  nothing_to_stake: You have nothing left to invest.
+  turn_failed: "Error: your last move was lost, send anything to pick back up from where you were."
 
   # {recharge} {unit_cost} {coherence} {balance} {budget} {bonus} {units}
   # {upgrades} {recovering} {recovery}
   marketplace_title: FOOMBERG™ In-Terminal Purchases
   marketplace: |
+    *FOOMPAK*
     Your terminal's coherence recovers in {recharge}. Reduced coherence makes bad investments more likely.
-    Each upgrade buys 1nh worth of recovery costing {unit_cost} from your day's budget.
+    Each FOOMPAK buys 1nh worth of recovery costing {unit_cost} from your day's budget.
 
     Coherence {coherence}{#if recovering} · Recovery in {recovery}{/if}
-    Current balance {balance} • Upgrades today {upgrades}
+    Current balance {balance} • {upgrades} FOOMPAK today 
 
   # What a purchase came to. The terminal takes what it has room for and is
   # charged for that alone, so {bought} can be fewer than {wanted} — which is
@@ -221,10 +222,50 @@ scenes:
 
   # Nothing to sell. An hour of recovery sold onto a full meter is an hour that
   # goes nowhere, so the shop does not take the money for it.
-  already_clean: "Your terminal is already clean — an upgrade would do nothing for it."
+  already_clean: "Your terminal is already fully coherent — a FOOMPAK would do nothing for it."
 
   # {cost} {balance}
-  cannot_afford: "An upgrade is {cost} and you have {balance}."
+  cannot_afford: "An FOOMPAK costs {cost} but you have {balance}."
+
+  # The floor's best three of three things, ever. A desk on probation can read
+  # it but cannot be on it, which is what {probation} is for.
+  #
+  # The three {tables} arrive as finished blocks of rows — the figures are
+  # padded to a common width by the engine, which is the only thing that can
+  # see how wide the widest of the nine is.
+  #
+  # {trades} {days} {weeks} {empty} {probation} {places}
+  leaderboard_title: Top Traders
+  leaderboard: |
+    Highest Single Profit
+    {trades}
+
+    Most Profitable Day
+    {days}
+
+    Most Profitable Week
+    {weeks}{#if probation}
+
+    _Pass probation to qualify for Top Trader Tracking._{/if}
+
+  # One row. The backticks are what make the columns line up: a proportional
+  # font throws padding away, and a monospaced one does not.
+  #
+  # {place} {amount} {name}
+  leaderboard_row: "`{amount}  {name}`"
+
+  # A table with nobody in it yet.
+  leaderboard_empty: "`--`"
+
+  # Said the moment a record is taken, before the board itself is shown. It
+  # names only the best of the places a turn took: a seventh day that took all
+  # three says the biggest of them and lets the table show the rest.
+  #
+  # {what} {place} {first}
+  record: "**{what}** — {#if first}top of the board.{:else}number {place} on the board.{/if}"
+  record_trade: A record trade
+  record_day: A record day
+  record_week: A record week
 
   # The bell says what the day came to and what it costs you, in words rather
   # than in a sum: the new budget is named in tomorrow's day block, which is
@@ -269,16 +310,15 @@ scenes:
   #
   # {elapsed} {gained} {recovered}
   night: | 
-    _You head home._ 
+    _You leave the office._ 
     
     _Night passes, on your desk your terminal runs its self-improving subroutines, recovering coherence._"
 
 # One of these is chosen at random when a player writes during their own run.
 chatter:
-  - The circuit is mid-run. Nothing to decide until it settles.
-  - Noted. The gates do not care.
-  - Still running. You can only watch from here.
-  - The stake is placed. It plays out either way.
+  - Focus on the terminal.
+  - Noted. The market doesn't care.
+  - You can either watch, or take what you have.
 
 prompts:
   # {options}
@@ -287,8 +327,9 @@ prompts:
   help: |
     `status` to see current time, funds and coherence
     `wait` to let a neo-hour pass and let your terminal clean up
+    `leaderboard` to see the floor's best three
     You can type any number, as well as selecting presets.
-  say_something: Say something, or type **help**.
+  say_something: typea a command, try **help**, **status**, **wait**...
   # shown when a player types something a running scene has no answer for
   scene_waiting: _Someone is still talking. Answer them, or **skip**._
   # The same, where the scene is waiting on something typed rather than
@@ -334,6 +375,7 @@ buttons:
   # world having to be watched through to do it
   wait: Wait 1nh
   marketplace: Marketplace
+  leaderboard: Top Traders
   status: Status
   # new in 04: a position is stepped by hand and closed whenever the player says
   hold: Hold for 1nh
