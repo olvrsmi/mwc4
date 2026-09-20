@@ -47,7 +47,7 @@ export function readRules () {
     budgetFloor: envNum('MW_BUDGET_FLOOR', 500),
     quota: envNum('MW_QUOTA', 0.10),
     probation: process.env.MW_PROBATION !== '0',
-    probationProfit: envNum('MW_PROBATION_PROFIT', 0),
+    probationShare: envNum('MW_PROBATION_SHARE', 0.5),
     weekBonus: envNum('MW_WEEK_BONUS', 100),
     upgradeCost: envNum('MW_UPGRADE_COST', 10),
     regenSteps: envNum('MW_REGEN_STEPS', 9),

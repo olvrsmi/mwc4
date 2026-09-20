@@ -104,9 +104,11 @@ section('the opening')
   const last = await walkScene(game, S)
   ok('the opening completes, scenes chaining into one another', !story.inSequence(S) && last !== null)
   ok('every opening scene is marked seen', COPY.opening.every((id) => S.seqSeen.includes(id)), S.seqSeen.join())
-  ok('then the game arrives with three worlds',
-     S.expect === 'world' && S.worlds.length === 3 && has(last, /Investment Options/) &&
+  ok('then the game arrives with the day, and three worlds',
+     S.expect === 'world' && S.worlds.length === 3 && has(last, /\*\*Day 1\*\*/) &&
      last.choices.filter((c) => /^[123]$/.test(c.token)).length === 3)
+  ok('and the day names the week it is on the hook for',
+     has(last, /7 days left of probation/) && has(last, /\u20ac\$3,500/) && has(last, /budget of \u20ac\$1,000/))
   ok('and the brochure is not read to someone who was walked in', !has(last, /premier neo-market/))
   await game.start(S)
   ok('the opening does not play twice', !story.inSequence(S))
@@ -114,7 +116,7 @@ section('the opening')
   const { game: g2, S: S2 } = mk(92)
   await g2.start(S2)
   const sk = await g2.handle(S2, 'skip')
-  ok('skip ends the opening and starts the game', !story.inSequence(S2) && S2.expect === 'world' && has(sk, /Investment Options/))
+  ok('skip ends the opening and starts the game', !story.inSequence(S2) && S2.expect === 'world' && has(sk, /\*\*Day 1\*\*/))
   ok('a skipped opening is not read as the brochure either', !has(sk, /premier neo-market/))
 
   const { game: g3, S: S3 } = mk(93, {}, { copySource: { ...COPY, opening: [] } })
@@ -139,8 +141,12 @@ section('the offer and entering a world')
   const offered = S.worlds.map((w) => w.info.id).join()
   const r = await game.handle(S, '1')
   ok('entering runs the first step and nothing else', S.world && S.world.readings.length === 1 && model.calls.length === 1 && model.calls[0].couple === null)
-  ok('and shows the sheet and a captioned chart',
-     has(r, /corporate monopolisation/) && r.emissions.some((e) => e.kind === 'traces' && /coherence/i.test(e.caption)))
+  ok('and shows the report, then a chart with nothing written under it',
+     has(r, /\*\*Report: /) && has(r, /corporate monopolisation/) &&
+     r.emissions.some((e) => e.kind === 'traces') && r.emissions.every((e) => !e.caption))
+  ok('the report leads with the two percentages and closes on the holdings',
+     /monopolisation[\s\S]*volatility[\s\S]*investment opportunit[\s\S]*unexposed|monopolisation[\s\S]*volatility[\s\S]*investment opportunit[\s\S]*exposed to/
+       .test(texts(r).find((t) => /monopolisation/.test(t))))
   ok('entering costs no time', S.dayStep === 0)
   const e = r.emissions.find((x) => x.kind === 'traces')
   ok('the chart carries what a renderer needs',
@@ -169,7 +175,9 @@ section('watching')
   ok('the panel moves to t1', r.emissions.some((e) => e.kind === 'traces' && e.upto === 1))
   let last
   for (let i = 0; i < 7; i++) last = await game.handle(S, 'o')
-  ok('t8 is the last chance', S.world.readings.length === 9 && last.emissions.some((e) => /Last chance/.test(e.caption || '')))
+  ok('t8 still offers the choice, and still says nothing under the chart',
+     S.world.readings.length === 9 && last.choices.some((c) => c.token === 'i') &&
+     last.emissions.every((e) => !e.caption))
   last = await game.handle(S, 'o')
   ok('watching the whole world ends the round untouched', S.world === null && has(last, /staked nothing/) && S.expect === 'world')
   ok('nine steps have passed', S.dayStep === 9 && game.summary(S).rounds === 1)
@@ -202,7 +210,8 @@ section('a position: stake, hold, settle')
      model.calls.length === before + 2 && model.calls.at(-2).couple === 1 && model.calls.at(-2).enter === true &&
      model.calls.at(-1).couple === null && model.calls.at(-1).enter === false)
   ok('the apparatus is in the circuit', S.run.entered && Array.isArray(S.run.apparatus))
-  ok('the reading rides on its chart', r.emissions.length === 1 && r.emissions[0].kind === 'traces' && /P\/L/.test(r.emissions[0].caption))
+  ok('the reading IS the chart - one emission, no caption',
+     r.emissions.length === 1 && r.emissions[0].kind === 'traces' && !r.emissions[0].caption)
   ok('with a ghost of the uncoupled run the whole way back', r.emissions[0].clean.length === 3 && r.emissions[0].priced.length === 3)
   const c0 = S.coherence
   await game.handle(S, 'h')
@@ -214,7 +223,8 @@ section('a position: stake, hold, settle')
   ok('closing settles the position', S.run === null && has(r, /Returns/) && S.expect === 'world')
   ok('the balance stays a whole number', Number.isInteger(S.balance))
   ok('the qubit comes back changed', S.coherence < 1 && S.coherence > 0)
-  ok('the next round is offered underneath', has(r, /Investment Options/) && S.worlds.length === 3)
+  ok('the next round is offered underneath, without re-opening the day',
+     has(r, /Three worlds are open/) && !has(r, /\*\*Day /) && S.worlds.length === 3)
   ok('four steps of the day have passed, and closing is not one', S.dayStep === 4)
   ok('an unknown word mid-position is nudged, not swallowed', (async () => true)())
 }
@@ -250,9 +260,9 @@ section('the bell')
   const bell = await game.handle(S, 'h')
   ok('the bell closes the position where it stands', S.run === null && has(bell, /Closed early: EOD/))
   ok('then the day', has(bell, /The bell/) && S.dayIndex === 1 && S.dayStep === 0)
-  ok('and only then the next round, on the new budget',
-     texts(bell).findIndex((t) => /The bell/.test(t)) < texts(bell).findIndex((t) => /Investment Options/.test(t)) &&
-     has(bell, /budget: 950G/))
+  ok('and only then the new day, on the new budget',
+     texts(bell).findIndex((t) => /The bell/.test(t)) < texts(bell).findIndex((t) => /\*\*Day 2\*\*/.test(t)) &&
+     has(bell, /budget of \u20ac\$950/) && has(bell, /6 days left of probation/))
   ok('a day with a losing trade costs 5%', S.budget === 950)
 
   const { game: g2, S: T } = mk(49)
@@ -303,23 +313,37 @@ section('probation')
     for (const pl of pls) { S.balance = S.budget + pl; S.investedToday = 1; last = game.closeDay(S) }
     return last
   }
+  // The bar is half of every budget the week is handed, which on a week that
+  // keeps clearing the quota is a little over 4,200 - so a week has to be
+  // properly good, not merely green.
   const won = mk(1)
-  const lw = week(won.game, won.S, [200, -50, 120, -30, 90, 40, 10])
-  ok('a profitable week passes probation', lw.verdict === 'passed' && won.S.probation === false)
+  const lw = week(won.game, won.S, [1200, -50, 900, 700, 1100, 400, 1500])
+  ok('a week that clears half the week\'s budget passes probation',
+     lw.verdict === 'passed' && won.S.probation === false, String(lw.target))
+  ok('and the bar it cleared was half of what it was handed',
+     Math.abs(lw.target - (1000 + 1100 + 1045 + 1150 + 1265 + 1392 + 1531) / 2) < 0.5, String(lw.target))
+  const thin = mk(1)
+  ok('a merely profitable one does not',
+     week(thin.game, thin.S, [200, -50, 120, -30, 90, 40, 10]).verdict === 'failed')
   ok('probation pays no bonus - the week is the reward', lw.bonusPaid === 0 && won.S.bonus === 0)
-  ok('and the week after does pay one', week(won.game, won.S, [200, -50, 120, -30, 90, 40, 10]).bonusPaid === 100 && won.S.bonus === 100)
+  ok('and the week after does pay one - off probation, any profit is a week',
+     week(won.game, won.S, [200, -50, 120, -30, 90, 40, 10]).bonusPaid === 100 && won.S.bonus === 100)
   const lost = mk(2)
   const ll = week(lost.game, lost.S, [-200, -50, 120, -30, -90, 40, 10])
   ok('a losing week fails it', ll.verdict === 'failed')
   ok('a retry winds the desk back', lost.S.budget === 1000 && lost.S.week.length === 0 && lost.S.attempts === 2 && lost.S.probation === true)
   ok('breaking even over the week does not pass', week(mk(3).game, mk(3).S, [0, 0, 0, 0, 0, 0, 0]).verdict === 'failed')
-  const strict = mk(4, { probationProfit: 500 })
-  ok('a probation profit bar is honoured', week(strict.game, strict.S, [100, 100, 100, 100, 50, 0, 0]).verdict === 'failed')
+  const lenient = mk(4, { probationShare: 0 })
+  ok('the share is a dial - at zero, breaking even is enough',
+     week(lenient.game, lenient.S, [0, 0, 0, 0, 0, 0, 0]).verdict === 'passed')
+  const strict = mk(4, { probationShare: 1 })
+  ok('and at one the whole week\'s budget has to be made back',
+     week(strict.game, strict.S, [1200, -50, 900, 700, 1100, 400, 1500]).verdict === 'failed')
 
   // the verdict is a scene, at the bell
   const { game: g, S: T } = mk(5)
   await skipOpening(g, T)
-  T.week = [100, 100, 100, 100, 100, 100]
+  T.week = [700, 700, 700, 700, 700, 700]; T.weekBudgets = T.week.map(() => 1000)
   T.balance = T.budget + 500; T.investedToday = 1; T.dayStep = 26
   await g.handle(T, '1')
   const r = await g.handle(T, 'o')
@@ -328,12 +352,12 @@ section('probation')
 
   const { game: g2, S: F } = mk(6)
   await skipOpening(g2, F)
-  F.week = [-100, -100, -100, -100, -100, -100]
+  F.week = [-100, -100, -100, -100, -100, -100]; F.weekBudgets = F.week.map(() => 1000)
   F.balance = F.budget - 100; F.investedToday = 1; F.dayStep = 26
   await g2.handle(F, '1')
   const r2 = await g2.handle(F, 'o')
   await walkScene(g2, F)
-  ok('a failed week says so and starts attempt two', has(r2, /Not a profitable week/) && F.attempts === 2 && F.budget === 1000)
+  ok('a failed week says so and starts attempt two', has(r2, /Not a profitable week/) && F.attempts === 2 && F.budget === 1000 && F.weekBudgets.length === 0)
   ok('a repeat attempt hears the floor carry on', has(r2, new RegExp(COPY.beats.again.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'))))
 }
 
@@ -406,7 +430,7 @@ section('running out of money')
   const r = await game.handle(S, 'c')
   ok('losing the last G says so', has(r, /out of money/) && S.balance >= 500)
   ok('and the rest of the day is forfeit', has(r, /The bell/) && S.dayIndex === 1 && S.dayStep === 0)
-  ok('with the next day offered', S.expect === 'world' && has(r, /Investment Options/))
+  ok('with the next day offered', S.expect === 'world' && has(r, /\*\*Day 2\*\*/))
 }
 
 // ---------------------------------------------------------------------------
@@ -439,7 +463,7 @@ section('help and status')
   ok('help reads the voice out and lists the keys, touching nothing',
      S.expect === 'holding' && has(h, /Commands/) && texts(h).length === voice + 1, `${texts(h).length} lines`)
   const st = await game.handle(S, 'state')
-  ok('status mid-position', has(st, /Investment Options/) && S.expect === 'holding')
+  ok('status mid-position', has(st, /\*\*Day 1\*\*/) && S.expect === 'holding')
   const junk = await game.handle(S, 'xyz')
   ok('junk mid-position is nudged', has(junk, /\*\*h\*\* to hold/) && S.run !== null)
   const empty = await game.handle(S, '   ')

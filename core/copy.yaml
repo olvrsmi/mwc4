@@ -58,44 +58,70 @@ pacing:
 
 scenes:
 
-  # {round} {coherence} {recovery} {recovering} {balance} {subscribed} {daily}
-  # {round} is still counted and still available here, it just is not the title
-  # any more: what this panel is is a list of what can be invested in.
-  round: |
-    **Investment Options**
+  # The day, established. This is said ONCE, when a day opens - not again
+  # between that day's rounds, which are offered on their own. Which is why
+  # the week's arithmetic is written out in full here: this is the one place
+  # the player is told where they stand.
+  #
+  # Money in this message is in euro-dollars, the company's unit. Quotes, P/L
+  # and returns stay in G, the market's - {balance_raw|euro} converts if a
+  # line here wants one of those.
+  #
+  # {day} {budget} {coherence} {recovering} {recovery} {week_line}
+  # {days_left} {target} {target_left} {ahead} {surplus} {made} {week_bonus}
+  # {pot} {has_pot} {balance} {pl} {round} {upgrades} {day_left} {probation}
+  day: |
+    **Day {day}**
 
-    Day {day} · {day_left} left
-    Your coherence: {coherence}{#if recovering} (recovery in {recovery}){/if}
-    Today's budget: {budget} · balance {balance} ({pl})
-    {#if has_bonus}Personal pot: {bonus}{/if}
+    You have a budget of {budget}.
+    {week_line}
+
+    Your terminal's coherence is {coherence}{#if recovering} (recovery in {recovery}){/if}
+
+  # The middle line of the block above. Two of them, because a probation week
+  # counts down to a target and an ordinary week counts down to a bonus - and
+  # they are separate keys so a writer can see both at once rather than
+  # reading them out of a conditional.
+  #
+  # The target is half of every budget the week is handed, so it is 3,500 on
+  # day one and moves from there: clear a day and tomorrow's allowance goes up,
+  # and so does what the week wants of you.
+  #
+  # {days_left} {target} {target_left} {ahead} {surplus} {made} {week_bonus} {pot}
+  day_probation: >-
+    You have {days_left} day{days_left|s::s} left of probation and
+    {#if ahead}are {surplus} clear of the {target} you need to pass.{:else}still
+    need to make {target_left} to pass.{/if}
+
+  # The same line, after probation. {made} is what the week has banked so far.
+  day_week: >-
+    You have {days_left} day{days_left|s::s} left of the week and have made
+    {made} so far. A week in profit pays {week_bonus} into your pot.
 
   # no values
   offer: Three worlds are open to you.
 
+  # The terminal's report on a world, printed on entering it. The two
+  # percentages lead because they are the only figures here that describe the
+  # whole market; the complexity word under them is that pair said in English.
+  #
   # {world} {opportunities} {complexity} {monopoly} {volatility} {disconnected}
   entered: |
-    **{world}**
-    {opportunities} investment {opportunities|s:opportunity:opportunities} · {complexity}
+    **Report: {world}**
     {monopoly}% corporate monopolisation
-    {volatility}% expected volatility{#if disconnected}
-    _Holdings here do not all connect._{/if}
+    {volatility}% expected volatility
+    {complexity}
 
+    {opportunities} investment {opportunities|s:opportunity:opportunities}:
     {rows}
 
   # one row per holding: {holding} {price} {contracted} {exposure} {exposed}
-  overview_row: "`{holding}`  {price} · {contracted}{#if exposed} · exposed to {exposure}{:else} · exposed to nothing{/if}"
+  overview_row: "`{holding}`  {price} · {contracted}{#if exposed} · exposed to {exposure}{:else} · unexposed{/if}"
 
-  # {world} {progress} {total} {coherence} {balance} {last_chance}
-  investment: |
-    **{world}** — {moment} (estimated length: {total})
-
-    Your coherence: {coherence}
-    Your balance: {balance}{#if last_chance}
-
-    _Last chance to act._{/if}
-
-  # {world} {holding} {value} {change} {arrow} {pl}
-  readout: "**{world}** · {holding} @ {value} · {change} {arrow} · P/L {pl}"
+  # A chart is sent on its own, with no line under it. The sheet already says
+  # which world, how old, how big and what the position is doing, and a caption
+  # repeating that is a worse copy of the picture. What a chart says is drawn
+  # on it - see `plots:` below.
 
   # {stake} {holding}
   staking: "{stake} on **{holding}**. Making investment."
@@ -629,10 +655,10 @@ sequences:
         This first week is your probation week. You need to prove your worth before you get to keep a cut of the profits as your salary. 
         
         - Probation week is a 7 day working week 
-        - you receive a €${budget} baseline daily budget 
+        - you receive a {daily_budget} baseline daily budget 
         - if you end the day with a more than 10% profit your budget is increased by 10% the next day
         - if not, it's reduced by 5%
-        - you must make a profit of €${budget * 7 / 2} to pass Probation
+        - you must make a profit of half of every budget you are handed that week - {week_target}, if nothing moves
         - if you fail you can keep trying, but normally only the nepo-hires have funds for that
 
   # --- the verdicts ---------------------------------------------------------

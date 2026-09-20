@@ -35,8 +35,8 @@
 // button is just a token the player could have typed.
 
 import {
-  DEFAULT_PRICE, basePrice, quote, priceReturn, valueFactor, prospectus, overview,
-  money, signedMoney, pct, fmt3, mulberry,
+  DEFAULT_PRICE, basePrice, quote, priceReturn, valueFactor, prospectus, overview, euro,
+  money, signedMoney, pct, mulberry,
 } from './pricing.mjs'
 import * as story from './story.mjs'
 import { withDelays } from './pacing.mjs'
@@ -51,7 +51,7 @@ export const DEFAULT_RULES = {
   budgetDown: 0.95,     // after any other day, idle ones included
   quota: 0.10,          // the share of the budget a day must clear to count
   probation: true,      // a new desk has a week to post a profit
-  probationProfit: 0,   // the week's total must exceed this to pass
+  probationShare: 0.5,  // of every budget the week is handed, the share it must clear
   weekBonus: 100,       // paid into the personal pot, only after probation
   upgradeCost: 10,      // one increment of regeneration, out of the day's budget
   regenSteps: 9,        // steps of watching that restore a spent qubit fully
@@ -103,6 +103,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       dayStep: 0,                  // world steps taken today
       investedToday: 0,
       week: [],                    // this week's daily results
+      weekBudgets: [],             // and the budget each of those days was played on
       history: [R.startBudget],
       probation: R.probation,
       attempts: 1,
@@ -189,6 +190,24 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   // Days and weeks
   // -------------------------------------------------------------------------
 
+  /** Days of the week still to play, today included. */
+  const daysLeft = (S) => Math.max(0, R.weekDays - ((S.weekBudgets || []).length))
+
+  /** What the week has banked. Today is not in it - it has not closed yet. */
+  const weekMade = (S) => (S.week || []).reduce((a, b) => a + b, 0)
+
+  /**
+   * What the week has to clear: a share of every budget it is handed.
+   *
+   * Only closed days have a budget on record; the ones still to come are
+   * reckoned at today's, so the bar moves as the allowance does. Clear a day
+   * and tomorrow's budget goes up - and so does what the week wants of you.
+   */
+  function weekTarget (S) {
+    const granted = (S.weekBudgets || []).reduce((a, b) => a + b, 0)
+    return (granted + S.budget * daysLeft(S)) * R.probationShare
+  }
+
   /**
    * Close the books and set tomorrow's allowance.
    *
@@ -205,14 +224,21 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     const next = Math.max(R.budgetFloor, Math.round(S.budget * (good ? R.budgetUp : R.budgetDown)))
 
     S.week.push(pl)
+    // the budget this day was played on, kept so the week's target is the sum
+    // of what was actually handed over rather than seven times today's
+    S.weekBudgets = [...(S.weekBudgets || []), S.budget]
     let bonusPaid = 0
     let weekTotal = null
     let passed = null
-    if (S.week.length >= R.weekDays) {
+    let target = null
+    if (S.weekBudgets.length >= R.weekDays) {
       weekTotal = S.week.reduce((a, b) => a + b, 0)
-      passed = weekTotal > (S.probation ? R.probationProfit : 0)
+      // on probation the bar is the week's own; afterwards any profit is a week
+      target = weekTarget(S)
+      passed = S.probation ? weekTotal >= target : weekTotal > 0
       if (passed && !S.probation) { S.bonus += R.weekBonus; bonusPaid = R.weekBonus }
       S.week = []
+      S.weekBudgets = []
     }
 
     const wasBudget = S.budget
@@ -234,10 +260,11 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
         S.budget = R.startBudget
         S.balance = R.startBudget
         S.week = []
+        S.weekBudgets = []
         S.history = [R.startBudget]
       }
     }
-    return { pl, traded, good, wasBudget, next, bonusPaid, weekTotal, verdict,
+    return { pl, traded, good, wasBudget, next, bonusPaid, weekTotal, verdict, target,
              attempt: S.attempts || 1, failures: (S.attempts || 1) - 1, day: S.dayIndex }
   }
 
@@ -289,6 +316,9 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
         out.push(text(C.t('scenes.week_end', ctx)))
       }
     }
+    // the day is established before anything that happens in it, the day's
+    // own setpiece included
+    out.push(...sceneMain(S))
     out.push(...story.fireBeat(C, S, beatCtx(S)))
     return out
   }
@@ -297,16 +327,44 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   // Panels
   // -------------------------------------------------------------------------
 
+  /**
+   * The day, established.
+   *
+   * It opens a day and is not said again between that day's rounds - the
+   * worlds are offered on their own after the first. Which is why the week's
+   * arithmetic is written out here in full: this is the one place it is said.
+   *
+   * The middle line is a key of its own because there are two of them - a week
+   * of probation counts down to a target, an ordinary week counts down to a
+   * bonus - and a writer should be able to see them side by side rather than
+   * inside a conditional.
+   */
   function sceneMain (S) {
     const recovering = S.coherence < 0.999
     const pl = S.balance - S.budget
-    return [text(C.t('scenes.round', {
+    const made = weekMade(S)
+    const target = weekTarget(S)
+    const short = target - made
+    const week = {
+      days_left: daysLeft(S),
+      target: euro(target), target_raw: target,
+      target_left: euro(Math.max(0, short)), target_left_raw: Math.max(0, short),
+      ahead: short <= 0,
+      surplus: euro(Math.max(0, -short)), surplus_raw: Math.max(0, -short),
+      made: euro(made), made_raw: made,
+      week_bonus: euro(R.weekBonus), week_bonus_raw: R.weekBonus,
+      pot: euro(S.bonus), pot_raw: S.bonus, has_pot: S.bonus > 0,
+    }
+    return [text(C.t('scenes.day', {
+      ...week,
+      week_line: C.t(S.probation ? 'scenes.day_probation' : 'scenes.day_week', week),
+      probation: S.probation,
       round: S.rounds + 1,
       coherence: S.coherence.toFixed(3), coherence_raw: S.coherence,
       recovering,
       recovery: recovering ? describeSteps(stepsToFull(S)) : '',
       balance: money(S.balance), balance_raw: S.balance,
-      budget: money(S.budget), budget_raw: S.budget,
+      budget: euro(S.budget), budget_raw: S.budget,
       bonus: money(S.bonus), bonus_raw: S.bonus, has_bonus: S.bonus > 0,
       day: S.dayIndex + 1,
       day_left: describeSteps(stepsLeft(S)),
@@ -381,20 +439,19 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     }
   }
 
+  /**
+   * The chart, and nothing else.
+   *
+   * It carries no caption on purpose. The sheet already says which world this
+   * is, how old it is, how big, and what the position is doing; a line under
+   * it saying the same again is a second, worse copy of the picture. The
+   * numbers are still on the emission for a renderer that wants them.
+   */
   function sceneInvestment (S) {
     const k = S.world.readings.length - 1
     S.expect = 'invest'
-    return [{
-      ...tracesPanel(S, { upto: k, title: C.t('plots.traces_title',
-        { world: S.world.name, moment: C.moment(k), progress: k }) }),
-      caption: C.t('scenes.investment', {
-        world: S.world.name,
-        moment: C.moment(k), progress: k, total: S.world.readouts - 1,
-        coherence: S.coherence.toFixed(3), coherence_raw: S.coherence,
-        balance: money(S.balance), balance_raw: S.balance,
-        last_chance: k === S.world.readouts - 2,
-      }),
-    }]
+    return [tracesPanel(S, { upto: k, title: C.t('plots.traces_title',
+      { world: S.world.name, moment: C.moment(k), progress: k }) })]
   }
 
   /** The uncoupled continuation behind a held holding, priced with the rest. */
@@ -418,33 +475,16 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
                             title: runningTitle(S, pct(0)) })
   }
 
-  /** After a held step: the chart so far, captioned with the reading. */
+  /** After a held step: the chart so far, and, as above, no words under it. */
   function readoutPanel (S) {
     const r = S.run
     const rows = S.world.readings
     const k = rows.length - 1
     const opened = rows[r.investAt][r.target]
     const now = rows[k][r.target]
-    const f = valueFactor(now, R.price)
-    const prev = valueFactor(rows[k - 1][r.target], R.price)
-    // no longer inverted: the quote is exp(+sigma * f), so a rising value
-    // factor is a rising price, and the arrow follows the physics as well as
-    // the price for the first time
-    const arrow = f > prev + 1e-6 ? '↗' : (f < prev - 1e-6 ? '↘' : '→')
     const mult = priceReturn(opened, now, R.price)
-    const caption = C.t('scenes.readout', {
-      world: S.world.name, target: r.target, holding: C.holding(r.target, r.holdings),
-      moment: C.moment(k),
-      value: money(quote(r.base, now, R.price)), value_raw: quote(r.base, now, R.price),
-      reading: fmt3(f), reading_raw: f,
-      change: pct(mult), change_raw: mult, arrow,
-      pl: signedMoney(r.stake * mult), pl_raw: r.stake * mult,
-    })
-    return {
-      ...tracesPanel(S, { upto: k, target: r.target, interventionAt: r.investAt,
-                          clean: ghost(S), title: runningTitle(S, pct(mult)) }),
-      caption,
-    }
+    return tracesPanel(S, { upto: k, target: r.target, interventionAt: r.investAt,
+                            clean: ghost(S), title: runningTitle(S, pct(mult)) })
   }
 
   function sceneMarket (S) {
@@ -619,7 +659,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     S.world = null
     S.pending = null
     if (story.inSequence(S)) return []
-    return [...sceneMain(S), ...offerWorlds(S)]
+    return offerWorlds(S)
   }
 
   // -------------------------------------------------------------------------
@@ -629,6 +669,19 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   /** The world list is not saved with a session; fetch it when it is missing. */
   async function hydrate (S) {
     if (!S.allWorlds) S.allWorlds = await model.worlds()
+    // The probation arithmetic, for any scene that quotes it. It lives on the
+    // session rather than being handed to a scene when it starts because
+    // `help` reads the tutorial back OUTSIDE a running scene, and a line that
+    // rendered in the opening has to render there too.
+    S.vars = {
+      ...(S.vars || {}),
+      daily_budget: euro(R.startBudget),
+      week_target: euro(R.startBudget * R.weekDays * R.probationShare),
+    }
+    // A game saved before the week's budgets were kept. The days already
+    // closed are reckoned at today's, which is what the target does with the
+    // days still to come.
+    if (!Array.isArray(S.weekBudgets)) S.weekBudgets = (S.week || []).map(() => S.budget)
     // A game saved while the exit question still existed. Nothing was taken -
     // the stake leaves the balance only when the position opens - so it picks
     // up at the invest prompt, with the world and its readings as they were.
@@ -724,7 +777,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
         // leaving is free only before anything has been watched
         if (cmd === 'l' && k === 0) {
           S.world = null
-          return result(S, [text(C.t('scenes.left')), ...sceneMain(S), ...offerWorlds(S)])
+          return result(S, [text(C.t('scenes.left')), ...offerWorlds(S)])
         }
         if (cmd === 'o' || cmd === 'w') return result(S, await observe(S))
         if (cmd !== 'i') {
@@ -765,7 +818,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       }
 
       case 'market': {
-        if (cmd === 'l') return result(S, [...sceneMain(S), ...offerWorlds(S)])
+        if (cmd === 'l') return result(S, offerWorlds(S))
         if (cmd === 'b') { S.expect = 'buy'; return result(S, [text(C.t('scenes.ask_units'))]) }
         return result(S, [text(C.t('prompts.unknown', { options: '**b** or **l**' }))])
       }

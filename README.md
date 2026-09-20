@@ -162,7 +162,7 @@ closes with the books:
 | a day that clears 10% of its budget | tomorrow's budget rises 10% |
 | any other day, an idle one included | tomorrow's budget falls 5% |
 | out of money | the rest of the day is forfeit and the bell rings |
-| the seventh day, on probation | a positive week passes; a failed one starts the week again |
+| the seventh day, on probation | the week's profit must clear half of every budget the week was handed - 3,500 on an unchanged week, and it moves with the budget. A failed one starts the week again |
 | the seventh day, afterwards | a positive week pays 100G into a personal pot that cannot be staked |
 
 A position is opened with no end date on it: it runs a step at a time, for as
@@ -291,7 +291,7 @@ Emissions are what a renderer shows, in order:
 |---|---|---|
 | `text` | `text`, `speaker?` | a small markdown subset: `**bold**`, `_italic_`, `` `code` `` |
 | `art` | `art`, `text?`, `speaker?` | a named picture; `host/art/<name>.png` here |
-| `traces` | `title`, `caption`, `n`, `holdings`, `priced`, `clean`, `upto`, `totalReadouts`, `target`, `interventionAt`, `foot`, `f` | a chart; `host/render.mjs` draws it, or a renderer draws its own from the numbers. `priced` is the quote series, `f` the value factor behind it |
+| `traces` | `title`, `caption?`, `n`, `holdings`, `priced`, `clean`, `upto`, `totalReadouts`, `target`, `interventionAt`, `foot`, `f` | a chart; `host/render.mjs` draws it, or a renderer draws its own from the numbers. `priced` is the quote series, `f` the value factor behind it. The game sends charts without a caption - what one says is drawn on it |
 
 `choices` is the list of `{ token, label, kind }` the player may send next,
 where `kind` is `game`, `scene` or `beat` - a beat's choices arrive alongside
@@ -349,7 +349,7 @@ chat can be read back in the browser with its pictures. Charts older than
 All optional, all in `.env.example`: `MW_STEPS` (10 readouts a world),
 `MW_DAY_STEPS` (27), `MW_WEEK_DAYS` (7), `MW_REGEN_STEPS` (9),
 `MW_NIGHT_STEPS` (9), `MW_START_BUDGET`, `MW_BUDGET_FLOOR`, `MW_QUOTA`,
-`MW_WEEK_BONUS`, `MW_UPGRADE_COST`, `MW_PROBATION`, `MW_PROBATION_PROFIT`,
+`MW_WEEK_BONUS`, `MW_UPGRADE_COST`, `MW_PROBATION`, `MW_PROBATION_SHARE`,
 `MW_COUNTERFACTUAL`, `PORT`, `MW_BIND`, `MW_STATE_DIR`, `MW_SECRET`,
 `MW_BOT_USERNAME`, `MW_PUBLIC_URL`, `MW_TRUST_PROXY`, `MW_SWEEP_DAYS`.
 

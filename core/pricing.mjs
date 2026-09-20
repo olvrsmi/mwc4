@@ -43,6 +43,9 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 
 // `|| 0` collapses negative zero, which would otherwise print as "-0G"
 export const money = (v) => `${(Math.round(v) || 0).toLocaleString('en-GB')}G`
+// The firm keeps two sets of books. A quote is in G, because a market is; an
+// allowance, a target and a bonus are in euro-dollars, because the company is.
+export const euro = (v) => `€$${(Math.round(v) || 0).toLocaleString('en-GB')}`
 export const signedMoney = (v) => `${Math.round(v) > 0 ? '+' : ''}${money(v)}`
 export const pct = (m) => `${m >= 0 ? '+' : ''}${(m * 100).toFixed(1)}%`
 export const fmt3 = (v) => `${v >= 0 ? '+' : ''}${v.toFixed(3)}`

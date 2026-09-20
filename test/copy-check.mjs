@@ -53,7 +53,9 @@ S.dayStep = 26
 await say('1', 'i', '100', '0', 'h')                               // the bell closes it, and the day
 await say('1', 'o', 'l')                                           // a nudge or two
 await say('m', 'b', '10', 'l')                                     // the workshop
-S.week = [1, 1, 1, 1, 1, 1]; S.dayStep = 26; S.balance = S.budget + 500; S.investedToday = 1
+// six days on the books, and a seventh that clears the week's target
+S.week = [700, 700, 700, 700, 700, 700]; S.weekBudgets = S.week.map(() => 1000)
+S.dayStep = 26; S.balance = S.budget + 500; S.investedToday = 1
 await say('1', 'o')                                                // the week ends in a verdict
 await walk()
 S.probation = true; S.attempts = 2
@@ -122,12 +124,17 @@ for (const key of copy.allKeys()) {
 }
 
 // Scenes are rendered against what a scene can read: the budget, the coherence,
-// whatever an `ask` captured, and for the verdicts the week's numbers.
+// whatever the engine has parked on the session (the probation arithmetic, so
+// that `help` can read the tutorial back outside a running scene), whatever an
+// `ask` captured, and for the verdicts the week's numbers.
+//
+// The session's own vars are taken from the play-through above rather than
+// listed here, so a name the engine starts supplying needs no edit in this file.
 const asks = new Set()
 for (const nodes of Object.values(source.sequences || {})) {
   if (Array.isArray(nodes)) for (const n of nodes) if (n && n.ask) asks.add(String(n.ask))
 }
-const sceneCtx = new Set(['budget', 'coherence', ...asks])
+const sceneCtx = new Set(['budget', 'coherence', ...Object.keys(S.vars || {}), ...asks])
 const verdictCtx = new Set([...sceneCtx, 'total', 'total_raw', 'paid', 'bonus', 'pot', 'attempt', 'failures', 'again'])
 for (const [id, nodes] of Object.entries(source.sequences || {})) {
   if (!Array.isArray(nodes)) { problems.push(`sequences.${id} should be a list of nodes`); continue }

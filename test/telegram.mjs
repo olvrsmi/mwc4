@@ -23,7 +23,7 @@ import { loadSpecs } from '../host/specs.mjs'
 import { createStore } from '../host/store.mjs'
 import { createArtifacts } from '../host/deliver.mjs'
 import { artPath, ART } from '../host/render.mjs'
-import { createBot, toHtml, splitText, keyboardFor, sessionId, MAX_TEXT, MAX_CAPTION } from '../client-telegram/bot.mjs'
+import { createBot, toHtml, splitText, keyboardFor, sessionId, MAX_TEXT } from '../client-telegram/bot.mjs'
 import { stickerOf, STICKER_SIDE, isAnimation } from '../client-telegram/sticker.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -227,7 +227,7 @@ section('a conversation')
 
   h.sent.length = 0
   await say(h.bot, 'skip')
-  ok('skip reaches the game', texts(h.sent).some((t) => /Investment Options/.test(t)))
+  ok('skip reaches the game', texts(h.sent).some((t) => /\*\*Day 1\*\*|Day 1/.test(t)))
   const kb = kbOf(h.sent.filter((s) => kbOf(s)).at(-1)).flat()
   ok('three worlds and the workshop are offered',
      kb.filter((b) => /^[123]$/.test(b.callback_data)).length === 3 && kb.some((b) => b.callback_data === 'm'), JSON.stringify(kb.map((b) => b.callback_data)))
@@ -238,9 +238,8 @@ section('a conversation')
   ok('the callback is answered before the work', h.sent[0].method === 'answerCallbackQuery')
   ok('entering a world sends the chart as a photo', h.sent.some((s) => s.method === 'sendPhoto'))
   const photo = h.sent.find((s) => s.method === 'sendPhoto')
-  ok('the chart rides with its reading as one message', typeof photo.payload.caption === 'string' && photo.payload.caption.length > 0)
-  ok('and the caption is inside the cap', photo.payload.caption.length <= MAX_CAPTION)
-  ok('the sheet came first, as text', texts(h.sent).some((t) => /monopolisation/.test(t)))
+  ok('the chart travels on its own, with no caption under it', photo.payload.caption === undefined)
+  ok('the report came first, as text', texts(h.sent).some((t) => /monopolisation/.test(t)))
 
   h.sent.length = 0
   for (const t of ['i', '250', '1', '5']) await say(h.bot, t)
@@ -253,7 +252,7 @@ section('a conversation')
   ok('holding a step reports on a chart', h.sent.some((s) => s.method === 'sendPhoto'))
   h.sent.length = 0
   await say(h.bot, 'c')
-  ok('closing settles and re-offers', texts(h.sent).some((t) => /Returns/.test(t)) && texts(h.sent).some((t) => /Investment Options/.test(t)))
+  ok('closing settles and re-offers', texts(h.sent).some((t) => /Returns/.test(t)) && texts(h.sent).some((t) => /Three worlds are open/.test(t)))
 
   h.sent.length = 0
   await say(h.bot, 'nonsense that means nothing')
@@ -282,7 +281,7 @@ section('/start, /restart and the commands')
   })
   const after = (await h.host.store.load(sessionId('42'))).session
   ok('/start on an existing chat does NOT wipe it', after.run !== null && after.balance === 500)
-  ok('it shows the standing instead', texts(h.sent).some((t) => /Investment Options/.test(t)))
+  ok('it shows the standing instead', texts(h.sent).some((t) => /Day 1/.test(t)))
 
   h.sent.length = 0
   await h.bot.handleUpdate({

@@ -22,6 +22,7 @@ const FILTERS = {
   '1dp': (v) => Number(v).toFixed(1),
   round: (v) => String(Math.round(Number(v))),
   money: (v) => `${(Math.round(Number(v)) || 0).toLocaleString('en-GB')}G`,
+  euro: (v) => `€$${(Math.round(Number(v)) || 0).toLocaleString('en-GB')}`,
   pct: (v) => `${Number(v) >= 0 ? '+' : ''}${(Number(v) * 100).toFixed(1)}%`,
   signed: (v) => `${Number(v) >= 0 ? '+' : ''}${Number(v)}`,
   upper: (v) => String(v).toUpperCase(),
