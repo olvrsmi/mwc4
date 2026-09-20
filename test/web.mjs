@@ -44,7 +44,9 @@ const TOKEN = '424242:TEST-TOKEN'
 const quiet = { log () {}, error () {} }
 
 /** A server on an ephemeral port, over a scratch store. */
-async function harness ({ rateLimit, previewing } = {}) {
+// `previewing` defaults to false rather than to the environment: these tests
+// must mean the same thing on a machine whose .env happens to set MW_PREVIEW.
+async function harness ({ rateLimit, previewing = false } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'mw4-web-'))
   const copy = createCopy(COPY, { random: () => 0 })
   const model = createFakeModel({ worlds: specs.worlds })
