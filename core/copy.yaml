@@ -846,11 +846,11 @@ sequences:
         ... the founders are calling
     - voice: player
       text: |
-        you face the camera and smile, but not too much
+        _you face the camera and smile, but not too much_
     - art: founders
       speaker: Martin
       text: |
-        "Hi!"
+        Hi!
     - speaker: Lara
       text: |
         Hey! Welcome to the team...
@@ -859,11 +859,9 @@ sequences:
     - speaker: Martin + Lara
       text: |
         We have to admit we weren't sure you'd make it, but well done. We've got a good feeling about how much money you're going to make this company.
-    - speaker: Martin
-      text: |
-        "We'll keep an eye on it, of course. Best thing to aim for is to get your self on our Top Traders list so we can see you're really a good culture fit."
-    - speaker: Martin + Lara
-      text: |
+        
+        We'll keep an eye on it, of course. Best thing to aim for is to get your self on our Top Traders list so we can see you're really a good culture fit.
+   
         Good Luck!
       choices:
         a:
@@ -884,7 +882,7 @@ sequences:
         ... the founders are calling?
     - voice: player
       text: |
-        you try to think of an excuse, maybe you can blame Navinder?
+        _you try to think of an excuse, maybe you can blame Navinder?_
     - art: founders
       speaker: Martin + Lara
       text: |
@@ -892,7 +890,7 @@ sequences:
         
         We'll make this quick. That was not a profitable week, but we're extending your probation. You have one more week.
         
-        You start again on {budget}{#if again} — attempt {attempt}{/if}.
+        You start again tomorrow on {budget}{#if again} — attempt {attempt}{/if}.
       choices:
         a:
           label: Express appreciation
