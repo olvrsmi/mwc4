@@ -9,7 +9,9 @@
 //
 // What the clients still own separately is how a turn LOOKS: the browser gets a
 // page it can replay, Telegram gets messages it cannot. What they share is
-// everything about what a turn IS.
+// everything about what a turn IS - and, for a player signed in to both, the
+// turn itself: host/mirror.mjs says a browser turn again in the chat, which is
+// the only thing either client sends without being asked.
 //
 //   npm start
 //
@@ -20,6 +22,7 @@
 
 import { createHost, createSessions, printBanner, STATE_DIR } from './host/setup.mjs'
 import { createArtifacts } from './host/deliver.mjs'
+import { createMirror } from './host/mirror.mjs'
 import { createWebServer, createWebDeliver } from './client-http/server.mjs'
 import { createBot, COMMANDS } from './client-telegram/bot.mjs'
 
@@ -37,7 +40,15 @@ const artifacts = createArtifacts({ stateDir: STATE_DIR })
 // The one thing both clients must share. Everything else about them differs.
 const queues = new Map()
 
-const webSessions = createSessions(host, { deliver: createWebDeliver(artifacts), queues })
+// A turn played on the page is delivered to the page and nowhere else. This is
+// what also says it in the chat, for the player who signed in and is in both.
+// With no bot it never attaches and the wrapper costs a function call.
+const mirror = createMirror({ game: host.game })
+
+const webSessions = createSessions(host, {
+  deliver: mirror.wrap(createWebDeliver(artifacts)),
+  queues,
+})
 
 // ---------------------------------------------------------------------------
 // The bot, which is allowed to be absent and allowed to fail
@@ -71,6 +82,9 @@ async function startBot () {
     console.error('  bot      the web client is unaffected and still serving')
     return null
   }
+  // Only now. A token Telegram has already rejected cannot mirror anything, and
+  // attaching before the check would turn every browser turn into a failed send.
+  mirror.attach(made.deliver)
   // start() resolves only when polling stops, so it is watched, not awaited
   made.bot.start({ onStart: (me) => { botState = 'polling'; console.log(`  bot      polling as @${me.username}`) } })
     .catch((e) => {
@@ -125,6 +139,10 @@ async function shutdown (signal) {
   }, 15_000)
   done.unref()
   server.close()
+  // Bursts already on their way to a chat, before the bot they are using is
+  // stopped out from under them. A mirrored turn is saved either way; this is
+  // so the chat is not cut off mid-sentence by a deploy.
+  await mirror.drain()
   try { if (bot) await bot.stop() } catch { /* already stopped */ }
   await Promise.allSettled([...queues.values()])
   console.log('  all done\n')

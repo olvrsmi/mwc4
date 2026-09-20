@@ -8,8 +8,13 @@
 //
 // The game is turn-based, so this is a pure request/response bot. 03 had a
 // whole unprompted-delivery layer behind it - wake timers, catch-up days, a
-// resume sweep at boot - and none of it is carried over: nothing is ever sent
-// except in answer to an update.
+// resume sweep at boot - and none of it is carried over: nothing in here is on
+// a clock, and nothing is sent of its own accord.
+//
+// It does send without an update of its own, in one case: `deliver` is exported
+// and host/mirror.mjs calls it with a turn the player took in the browser, so a
+// game carries across for someone signed in to both. That is still someone's
+// turn being answered - just not one that arrived here.
 //
 //   TELEGRAM_BOT_TOKEN        required, from @BotFather
 //   TELEGRAM_BOT_TOKEN_LOCAL  used instead when MW_LOCAL=1
@@ -246,10 +251,14 @@ export function createBot ({
    * The keyboard rides the LAST message of the burst and nothing before it: a
    * keyboard halfway up offers a decision the player has not been told about
    * yet, and leaves a dead one above the live one.
+   *
+   * `choices` is read from S, and is a parameter only for the mirror: that
+   * delivers a browser turn some time after the turn happened, by which point
+   * S has moved on, and the keyboard has to be the one the turn being shown
+   * ended with rather than whatever the session says now.
    */
-  async function deliver (id, emissions, S) {
+  async function deliver (id, emissions, S, choices = S ? game.choices(S) : []) {
     const chatId = chatOf(id)
-    const choices = S ? game.choices(S) : []
     // What goes in the transcript, in the same shape the web client writes: a
     // chart as the URL of the file it was rendered to, not as bytes. A game
     // played here has to be readable there.
