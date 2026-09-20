@@ -426,7 +426,52 @@ async function show (r) {
   seen = mark(r)
 }
 
+// ---------------------------------------------------------------------------
+// Reading a scene
+//
+// `?scene=probation_passed` plays one scene on its own, in a game the server
+// keeps for the purpose - so the choices can be clicked and the pacing watched
+// without playing the week that would otherwise be in the way. Nothing here
+// touches the player's own game: take the query string off and reload, and it
+// is where it was.
+//
+// The server only answers this when MW_PREVIEW is set, so on a deployment the
+// route is not there at all and this quietly does nothing.
+// ---------------------------------------------------------------------------
+let previewing = null
+
+async function preview (scene, vars = {}) {
+  previewing = scene || null
+  setBusy(true)
+  try {
+    if (!scene) {
+      const { scenes } = await post('/api/preview', {})
+      console.log(`mw.preview(<name>) - ${scenes.length} scenes:\n  ${scenes.join('\n  ')}`)
+      return scenes
+    }
+    log.innerHTML = ''
+    const r = await post('/api/preview', { scene, vars })
+    await renderBurst(r.emissions)
+    renderChoices(r.choices)
+    renderStatus(r.summary)
+  } catch (e) {
+    previewing = null
+    trouble(`Could not read '${scene}': ${e.message}`)
+  } finally {
+    setBusy(false)
+    scroll()
+  }
+}
+
+// `mw.preview('probation_failed')` re-runs without a reload, which matters
+// because the server re-reads copy.yaml when it is saved: edit a line, run it
+// again, and the change is on the screen.
+window.mw = { preview, scenes: () => preview(null) }
+
 async function boot (reset = false) {
+  const wanted = new URLSearchParams(location.search).get('scene')
+  if (wanted && !reset) return preview(wanted)
+  previewing = null
   setBusy(true)
   try {
     await show(await post(reset ? '/api/reset' : '/api/session'))
@@ -447,7 +492,9 @@ async function boot (reset = false) {
  * enough - and it costs nothing when nothing has changed.
  */
 async function resync () {
-  if (busy || document.hidden) return
+  // a scene being read is not a game that can have moved on elsewhere, and
+  // resyncing would quietly put the player back in their own week
+  if (busy || document.hidden || previewing) return
   try {
     const r = await post('/api/session')
     if (mark(r) === seen) return showAccount(r)
@@ -471,7 +518,7 @@ async function say (token, label) {
   echo(label && label !== token ? `${label}` : labelFor(token))
   scroll()
   try {
-    const r = await post('/api/say', { text: token })
+    const r = await post('/api/say', { text: token, preview: previewing })
     // the game this browser was in is gone; what came back is a whole new one
     if (r.reopened) return await show(r)
     await renderBurst(r.emissions)

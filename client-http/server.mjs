@@ -14,6 +14,7 @@
 //   POST /api/session               resume this player's game, or start one
 //   POST /api/say      {text}       one turn: emissions, choices, summary
 //   POST /api/reset                 start over, as the same player
+//   POST /api/preview  {scene}      play one scene, in a game kept for it
 //   POST /api/auth/telegram {user}  the Login Widget's payload, checked
 //   POST /api/auth/claim   {keep}   which game to keep, when there are two
 //   POST /api/auth/logout           back to playing as nobody
@@ -23,6 +24,7 @@
 //   MW_BIND           default 127.0.0.1 (see the note at listen)
 //   MW_MODEL          local | fake | http           (default local)
 //   MW_STATE_DIR      where saved games and rendered charts live
+//   MW_PREVIEW        1 to open /api/preview; off, and it is not there at all
 //   the rest are in .env.example
 
 import { createServer } from 'node:http'
@@ -156,6 +158,7 @@ export function createWebServer ({
   botUsername = process.env.MW_BOT_USERNAME || null,
   publicUrl = process.env.MW_PUBLIC_URL || '',
   trustProxy = process.env.MW_TRUST_PROXY === '1',
+  previewing = process.env.MW_PREVIEW === '1',
   botStatus = () => null,
   rateLimit = createRateLimit(),
 } = {}) {
@@ -169,6 +172,11 @@ export function createWebServer ({
     console.warn('  Everyone is signed out by a restart. Set MW_SECRET before deploying.')
   }
   const { game, store } = host
+  // The scratch game a previewed scene is played in. Named rather than signed,
+  // and deliberately not a shape `validSubject` would accept, so it can never
+  // be reached by a cookie or be mistaken for somebody's week.
+  const PREVIEW_ID = 'preview-scene'
+  if (previewing) console.warn('  MW_PREVIEW is on: /api/preview will play any scene by name.')
 
   // Secure cookies are dropped by the browser over plain HTTP, which on a
   // localhost run would mean every request looks like a brand new player.
@@ -366,16 +374,43 @@ export function createWebServer ({
           // from a backup, or a development restart with no MW_SECRET set. The
           // page cannot do anything with a 404, so it gets a whole standing and
           // redraws from it instead.
-          if (!store.has(subject)) {
+          if (previewing && body.preview && !store.has(PREVIEW_ID)) {
+            return json(res, 409, { error: 'that preview is gone; start it again' })
+          }
+          if (!(previewing && body.preview) && !store.has(subject)) {
             const { rec, fresh } = await sessions.open(subject)
             return json(res, 200, { ...standing(subject, rec, { fresh }), reopened: true },
                         { 'Set-Cookie': cookieFor(subject) })
           }
-          const r = await sessions.turn(subject, String(body.text ?? ''))
-          const rec = await store.load(subject)
+          // a turn taken while reading a scene belongs to the scene's own
+          // game, so clicking its choices never reaches the player's week
+          const playing = previewing && body.preview ? PREVIEW_ID : subject
+          const r = await sessions.turn(playing, String(body.text ?? ''))
+          const rec = await store.load(playing)
           return json(res, 200, { ...r, logLength: rec?.log.length ?? 0 },
                       { 'Set-Cookie': cookieFor(subject) })
         }
+        // Reading a scene, in a game kept for reading scenes.
+        //
+        // It is a separate game rather than the player's own, and it is named
+        // rather than signed - so previewing cannot wind anybody's week, and
+        // taking the query string off the URL puts you back in your own game
+        // with nothing changed. Off unless MW_PREVIEW says otherwise: a
+        // deployed game should not hand out its endings to a guessed URL.
+        if (url.pathname === '/api/preview') {
+          if (!previewing) { res.writeHead(404); return res.end('not found') }
+          const scene = String(body.scene ?? '')
+          const known = host.game.scenes()
+          if (!scene) return json(res, 200, { scenes: known })
+          // a name that is not a scene is a typo, not a fault: answered, and
+          // not written to the log with a stack under it
+          if (!known.includes(scene)) {
+            return json(res, 404, { error: `no scene called '${scene}'`, scenes: known })
+          }
+          const r = await sessions.preview(PREVIEW_ID, scene, body.vars || {})
+          return json(res, 200, { ...r, preview: scene })
+        }
+
         if (url.pathname === '/api/reset') {
           // The game goes, the player stays: a logged-in player cannot change
           // who they are by starting again, and nobody can start again for them.

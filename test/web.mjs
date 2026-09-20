@@ -44,7 +44,7 @@ const TOKEN = '424242:TEST-TOKEN'
 const quiet = { log () {}, error () {} }
 
 /** A server on an ephemeral port, over a scratch store. */
-async function harness ({ rateLimit } = {}) {
+async function harness ({ rateLimit, previewing } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'mw4-web-'))
   const copy = createCopy(COPY, { random: () => 0 })
   const model = createFakeModel({ worlds: specs.worlds })
@@ -56,7 +56,7 @@ async function harness ({ rateLimit } = {}) {
   const sessions = createSessions(host, { deliver: createWebDeliver(artifacts), queues })
   const server = createWebServer({
     host, sessions, artifacts, secret: SECRET, botToken: TOKEN,
-    botUsername: 'mw_test_bot', publicUrl: 'http://localhost', rateLimit,
+    botUsername: 'mw_test_bot', publicUrl: 'http://localhost', rateLimit, previewing,
   })
   await new Promise((r) => server.listen(0, '127.0.0.1', r))
   const base = `http://127.0.0.1:${server.address().port}`
@@ -410,6 +410,46 @@ section('one game, both clients')
   ok('a turn from the browser still works on the shared game', web.emissions !== null)
   ok('the queue is shared, so both clients are one line',
      made.sessions.queues === h.queues)
+  await h.cleanup()
+}
+
+// ---------------------------------------------------------------------------
+section('reading a scene')
+{
+  const shut = await harness()
+  const b0 = browser(shut.base)
+  const off = await b0.post('/api/preview', { scene: 'probation_passed' })
+  ok('a server that was not asked to has no preview at all', off.status === 404)
+  await shut.cleanup()
+
+  const h = await harness({ previewing: true })
+  const b = browser(h.base)
+  await b.post('/api/session')
+  const mine = await b.post('/api/say', { text: 'skip' })
+  const myDay = mine.body.summary.day
+
+  const list = await b.post('/api/preview', {})
+  ok('it can say which scenes there are',
+     list.body.scenes.includes('probation_passed') && list.body.scenes.includes('probation_failed'))
+
+  const r = await b.post('/api/preview', { scene: 'probation_passed' })
+  ok('a scene plays on its own, with its choices to click',
+     r.status === 200 && r.body.emissions.length > 1 && r.body.choices.length > 0)
+  ok('and the values it wanted are filled in rather than left blank',
+     r.body.emissions.some((e) => /\d/.test(e.title || '')),
+     JSON.stringify(r.body.emissions[0]?.title))
+
+  const clicked = await b.post('/api/say', { text: r.body.choices[0].token, preview: true })
+  ok('its choices answer the scene', clicked.status === 200 && clicked.body.emissions.length > 0)
+
+  // the whole point: reading a scene must not cost anybody their week
+  const still = await b.post('/api/session')
+  ok('and none of it touched the game the browser was playing',
+     still.body.summary.day === myDay && still.body.summary.expect === mine.body.summary.expect,
+     `${JSON.stringify(still.body.summary.expect)} was ${JSON.stringify(mine.body.summary.expect)}`)
+
+  const bad = await b.post('/api/preview', { scene: 'no-such-scene' })
+  ok('a name that is not a scene says so', bad.status === 404, JSON.stringify(bad.body))
   await h.cleanup()
 }
 

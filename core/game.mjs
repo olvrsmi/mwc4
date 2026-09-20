@@ -1007,6 +1007,51 @@ export function createGame ({ copy, model, board = NO_BOARD, rules = {}, random 
     }
   }
 
+  /**
+   * Plausible values for a scene played out of its turn.
+   *
+   * A scene normally reads the numbers of the moment that summoned it - the
+   * verdicts are handed the week's total and the attempt it was - and a scene
+   * started cold has no such moment behind it. These stand in for one, so what
+   * a writer sees is the shape of the line rather than a blank where a figure
+   * should be. They are invented, and nothing reads them but a preview.
+   */
+  function previewVars (S) {
+    const attempts = S.attempts || 1
+    return {
+      total: signedMoney(1088), total_raw: 1088,
+      paid: true, bonus: money(R.weekBonus), pot: money(R.weekBonus * 3),
+      attempt: attempts, failures: attempts - 1, again: attempts > 1,
+      budget: money(R.startBudget), coherence: S.coherence.toFixed(3),
+    }
+  }
+
+  /**
+   * Play a named scene, for reading it. Not part of the game.
+   *
+   * There is no other way to see the end of a probation week without playing
+   * one: it is seven days in, and the two failure scenes are further still. A
+   * writer editing those lines needs to watch them arrive and click through
+   * them, which is a different thing from checking that they are spelt right.
+   *
+   * It moves the session it is given, so give it one you do not want - the
+   * host keeps previews in a scratch game of their own.
+   */
+  function startScene (S, id, vars = {}) {
+    if (!(C.section(`sequences.${id}`) || []).length) {
+      throw Object.assign(new Error(`no scene called '${id}'`), { status: 404 })
+    }
+    // a second preview while the first is still running starts cleanly
+    if (story.inSequence(S)) story.endSequence(S)
+    const out = story.startSequence(C, S, id, { ...previewVars(S), ...vars })
+    if (story.inSequence(S)) S.expect = 'sequence'
+    return result(S, out)
+  }
+
+  /** Every scene there is, for a preview to offer. */
+  const scenes = () => Object.keys(C.section('sequences') || {})
+    .filter((id) => (C.section(`sequences.${id}`) || []).length)
+
   /** Handle one token. */
   async function handle (S, raw) {
     await hydrate(S)
@@ -1249,7 +1294,7 @@ export function createGame ({ copy, model, board = NO_BOARD, rules = {}, random 
 
   return {
     rules: R,
-    newSession, start, handle, waiting, choices, summary, hydrate,
+    newSession, start, handle, waiting, choices, summary, hydrate, startScene, scenes,
     setCopy (c) { C = c },
     get copy () { return C },
     // the pieces, for tests and other hosts

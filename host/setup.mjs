@@ -233,6 +233,35 @@ export function createSessions (host, {
   }
 
   /**
+   * A scene, played on its own, in a game kept for the purpose.
+   *
+   * For reading copy in a real client - clicking the choices, watching the
+   * pacing arrive - without playing the week that would otherwise be in the
+   * way. The game it runs in is thrown away and remade on every call, so a
+   * preview cannot touch anybody's week and repeating one starts clean.
+   *
+   * A host decides whether this is reachable at all; nothing here checks.
+   */
+  async function preview (id, scene, vars = {}) {
+    return enqueue(id, async () => {
+      const S = game.newSession(seed(id))
+      await game.hydrate(S)
+      // a scene whose name says which attempt it belongs to should read like it
+      S.attempts = Number(vars.attempt) || (/again/.test(scene) ? 3 : 1)
+      // The opening is marked seen so that whatever the scene hands back to is
+      // the game, not the lift and the lanyard again. A verdict then runs into
+      // the day that really follows one, which is a fair part of how it lands.
+      S.seqSeen = [...game.copy.list('opening')]
+      const rec = { session: S, log: [] }
+      const r = game.startScene(S, scene, vars)
+      const emissions = await deliver(id, r.emissions, S, { choices: r.choices })
+      if (keepLog) rec.log.push(...emissions)
+      await store.save(id, rec)
+      return { emissions, choices: r.choices, summary: r.summary }
+    })
+  }
+
+  /**
    * What the player sent, as the transcript should remember it.
    *
    * A token means nothing on its own a week later - `a` was a lift button once
@@ -310,5 +339,5 @@ export function createSessions (host, {
     return open(id, { fresh: true })
   }
 
-  return { open, openHeld, turn, reset, enqueue, enqueueAll, queues }
+  return { open, openHeld, turn, preview, reset, enqueue, enqueueAll, queues }
 }
