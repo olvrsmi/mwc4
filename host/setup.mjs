@@ -41,13 +41,14 @@ const envNum = (name, fallback) => (process.env[name] === undefined ? fallback :
 export function readRules () {
   return {
     steps: envNum('MW_STEPS', 10),
+    chartReadouts: envNum('MW_CHART_READOUTS', 15),
     daySteps: envNum('MW_DAY_STEPS', 27),
     weekDays: envNum('MW_WEEK_DAYS', 7),
     startBudget: envNum('MW_START_BUDGET', 1000),
     budgetFloor: envNum('MW_BUDGET_FLOOR', 500),
     quota: envNum('MW_QUOTA', 0.10),
     probation: process.env.MW_PROBATION !== '0',
-    probationShare: envNum('MW_PROBATION_SHARE', 0.5),
+    probationShare: envNum('MW_PROBATION_SHARE', 0.05),
     weekBonus: envNum('MW_WEEK_BONUS', 100),
     upgradeCost: envNum('MW_UPGRADE_COST', 10),
     regenSteps: envNum('MW_REGEN_STEPS', 9),

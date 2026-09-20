@@ -82,9 +82,9 @@ scenes:
   # they are separate keys so a writer can see both at once rather than
   # reading them out of a conditional.
   #
-  # The target is half of every budget the week is handed, so it is 3,500 on
-  # day one and moves from there: clear a day and tomorrow's allowance goes up,
-  # and so does what the week wants of you.
+  # The target is a twentieth of every budget the week is handed, so it is 350
+  # on day one and moves from there: clear a day and tomorrow's allowance goes
+  # up, and so does what the week wants of you.
   #
   # {days_left} {target} {target_left} {ahead} {surplus} {made} {week_bonus} {pot}
   day_probation: >-
@@ -146,7 +146,10 @@ scenes:
   # The whole of opening a position: one line, naming the holding and the
   # quote it was taken at. What happens next is on the buttons.
   #
-  # {holding} {opened_at} {stake} {target} {last} {every}
+  # A world has no last readout any more - it runs until the bell - so {left}
+  # is what is left of the DAY, which is the whole of the rope a position has.
+  #
+  # {holding} {opened_at} {stake} {target} {left} {every}
   position_open: "Position open on {holding} @ {opened_at}. Holding."
 
   # The two prices, the two amounts, and what it came to. What the trade cost
@@ -175,7 +178,6 @@ scenes:
   ask_units: How many upgrades?
 
   left: You leave before anything is committed.
-  observed_all: You observed the whole circuit and staked nothing. Your qubit is untouched.
 
   # An hour spent on nothing at all. No world moves — a world moves when you
   # move it — so what this buys is the clean-up a step of watching would have
@@ -764,7 +766,7 @@ sequences:
         - you receive a {daily_budget} baseline daily budget 
         - if you end the day with a more than 10% profit your budget is increased by 10% the next day
         - if not, it's reduced by 5%
-        - you must make a profit of 50% or more of your weekly total budget - {week_target} at baseline, but subject to change as your budget does
+        - you must make a profit of 5% or more of your weekly total budget - {week_target} at baseline, but subject to change as your budget does
         - if you fail you can keep trying, but normally only the nepo-hires have funds for that
 
   # --- the verdicts ---------------------------------------------------------

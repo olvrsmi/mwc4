@@ -8,6 +8,10 @@
 // The sheet is a dealing screen: 1024 x 544, black, ruled into 64px squares. A
 // square is also one readout wide, so a market ages rightwards a square at a
 // time and the player can count the steps off the paper without a time axis.
+// There are fourteen of them, and a market can outlive them: `from` says which
+// readout the left fence stands on, and everything older has aged off the
+// paper. The series itself is never cut, because the listing price and the
+// ladder are read off the whole of it.
 // The 64px columns at either edge carry the price ladder and are fenced off
 // with a hairline; a title bar carries the three facts that do not fit on the
 // grid. That is the whole of the furniture.
@@ -223,7 +227,7 @@ function rung (v, step) {
  * `priced` is the quote series; `f` is the value factor behind it, a linear
  * fallback for a caller without prices.
  */
-export function renderTraces ({ n, f, priced, clean, upto, totalReadouts, target = null,
+export function renderTraces ({ n, f, priced, clean, upto, from = 0, totalReadouts, target = null,
                                 interventionAt = null, holdings, world, title,
                                 market = 'NEO-MARKET', domain = null }) {
   const series = priced || f
@@ -239,7 +243,10 @@ export function renderTraces ({ n, f, priced, clean, upto, totalReadouts, target
   // to run off the end of the paper
   const steps = Math.max(1, (totalReadouts ?? series.length) - 1)
   const pitch = steps > COLS ? (X1 - X0) / steps : CELL
-  const x = (k) => X0 + k * pitch
+  // the left fence stands on `from`, so a readout older than the window lands
+  // left of the paper and is clipped away with the rest of its square
+  const origin = Math.min(Math.max(0, from), at)
+  const x = (k) => X0 + (k - origin) * pitch
   const { lo, hi, step } = domain
     ? { lo: domain[0], hi: domain[1], step: (domain[1] - domain[0]) / ROWS }
     : priceAxis(series)
@@ -301,14 +308,18 @@ export function renderTraces ({ n, f, priced, clean, upto, totalReadouts, target
     series.forEach((row, k) => (k ? ctx.lineTo(x(k), y(row[q])) : ctx.moveTo(x(k), y(row[q]))))
     ctx.stroke()
   }
-  // the listing price, marked - the one point on the line the player was given
-  // rather than found
-  for (const q of order) {
-    if (!Number.isFinite(series[0]?.[q])) continue
-    ctx.fillStyle = colour(q)
-    ctx.beginPath()
-    ctx.arc(x(0), y(series[0][q]), DOT, 0, Math.PI * 2)
-    ctx.fill()
+  // The listing price, marked - the one point on the line the player was given
+  // rather than found. Only while it is still on the paper: once a market has
+  // aged past the window the mark would sit on the left fence claiming to be a
+  // price the player was told, which is the one thing it means.
+  if (origin === 0) {
+    for (const q of order) {
+      if (!Number.isFinite(series[0]?.[q])) continue
+      ctx.fillStyle = colour(q)
+      ctx.beginPath()
+      ctx.arc(x(0), y(series[0][q]), DOT, 0, Math.PI * 2)
+      ctx.fill()
+    }
   }
   ctx.restore()
 
@@ -326,9 +337,13 @@ export function renderTraces ({ n, f, priced, clean, upto, totalReadouts, target
   }
 
   // ---- the names, over the ladder and never over each other ---------------
+  // Placed where each line ENTERS the paper rather than where it opened: on a
+  // market that has aged past the window those are different prices, and a
+  // name beside a line that is no longer there labels nothing.
+  const head = series[origin] ?? series[0]
   const names = order
-    .filter((q) => Number.isFinite(series[0]?.[q]))
-    .map((q) => ({ q, at: y(series[0][q]) }))
+    .filter((q) => Number.isFinite(head?.[q]))
+    .map((q) => ({ q, at: y(head[q]) }))
     .sort((a, b) => a.at - b.at)
   spread(names, CAP + 3, BAR + CAP, FLOOR - CAP)
   ctx.font = BOLD

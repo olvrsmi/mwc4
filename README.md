@@ -141,14 +141,17 @@ watching or holding - is one step of the game clock, and:
 
 | | |
 |---|---|
-| a world | ten readouts, t0 to t9, so nine steps |
-| a day | 27 steps: three worlds watched to the end, or however you spend them |
+| a world | as long as you stay in it. It has no length of its own |
+| a day | 27 steps, however you spend them |
 | a week | seven days |
-| the bell | the day's 27th step closes any open position where it stands |
+| the bell | the day's 27th step closes any open position where it stands, and the world with it |
 | the night | restores a spent qubit by nine steps' worth |
+| the chart | 15 readouts at a square each; older ones age off the left |
 
-Entering a world and leaving it cost nothing; the hours spent watching it are
-spent either way. `wait` is the one step that moves no world at all - the hour
+A world runs until you leave it, close out of it, or the bell closes you, so
+how far one can be taken is however much of the day was left when you walked
+in. Entering and leaving cost nothing; the hours spent watching it are spent
+either way. `wait` is the one step that moves no world at all - the hour
 goes, the qubit recovers, and every world stands where it stood, which is how
 a spent terminal is cleaned up without a world's readouts going with it.
 
@@ -169,7 +172,7 @@ closes with the books:
 | a day that clears 10% of its budget | tomorrow's budget rises 10% |
 | any other day, an idle one included | tomorrow's budget falls 5% |
 | out of money | the rest of the day is forfeit and the bell rings |
-| the seventh day, on probation | the week's profit must clear half of every budget the week was handed - 3,500 on an unchanged week, and it moves with the budget. A failed one starts the week again |
+| the seventh day, on probation | the week's profit must clear a twentieth of every budget the week was handed - 350 on an unchanged week, and it moves with the budget. A failed one starts the week again |
 | the seventh day, afterwards | a positive week pays €$100 into a personal pot that cannot be staked |
 
 A position is opened with no end date on it: it runs a step at a time, for as
@@ -303,7 +306,7 @@ Emissions are what a renderer shows, in order:
 |---|---|---|
 | `text` | `text`, `speaker?`, `title?`, `voice?` | a small markdown subset: `**bold**`, `_italic_`, `` `code` `` |
 | `art` | `art`, `text?`, `speaker?`, `title?`, `voice?` | a named picture; `host/art/<name>.png` here |
-| `traces` | `title`, `caption?`, `n`, `holdings`, `priced`, `clean`, `upto`, `totalReadouts`, `target`, `interventionAt`, `foot`, `f` | a chart; `host/render.mjs` draws it, or a renderer draws its own from the numbers. `priced` is the quote series, `f` the value factor behind it. The game sends charts without a caption - what one says is drawn on it |
+| `traces` | `title`, `caption?`, `n`, `holdings`, `priced`, `clean`, `upto`, `from`, `totalReadouts`, `target`, `interventionAt`, `foot`, `f` | a chart; `host/render.mjs` draws it, or a renderer draws its own from the numbers. `priced` is the quote series, `f` the value factor behind it. `from` is the readout the paper's left edge stands on: a world can outlive the 15 readouts a sheet holds, so the older ones age off the left while the series itself is never cut - the listing price and the price ladder are read off the whole of it. The game sends charts without a caption - what one says is drawn on it |
 
 `title` is the heading over a line: a speaker's name is one, and so is
 `Day 3` or `Report: Liked Rounds`, which the game reads from a `<key>_title`
@@ -375,16 +378,18 @@ chat can be read back in the browser with its pictures. Charts older than
 
 ## Tunables
 
-All optional, all in `.env.example`: `MW_STEPS` (10 readouts a world),
-`MW_DAY_STEPS` (27), `MW_WEEK_DAYS` (7), `MW_REGEN_STEPS` (9),
+All optional, all in `.env.example`: `MW_STEPS` (10, the horizon volatility is
+measured over), `MW_CHART_READOUTS` (15), `MW_DAY_STEPS` (27),
+`MW_WEEK_DAYS` (7), `MW_REGEN_STEPS` (9),
 `MW_NIGHT_STEPS` (9), `MW_START_BUDGET`, `MW_BUDGET_FLOOR`, `MW_QUOTA`,
 `MW_WEEK_BONUS`, `MW_UPGRADE_COST` (€$10 an hour), `MW_PROBATION`, `MW_PROBATION_SHARE`,
 `MW_COUNTERFACTUAL`, `PORT`, `MW_BIND`, `MW_STATE_DIR`, `MW_SECRET`,
 `MW_BOT_USERNAME`, `MW_PUBLIC_URL`, `MW_TRUST_PROXY`, `MW_SWEEP_DAYS`.
 
-Changing `MW_STEPS` invalidates `model/specs/_stats_cache.json`, which holds
-the volatility the prospectus quotes; `npm run warm` recomputes it with the
-local Python.
+`MW_STEPS` no longer sets how long a world runs - the day does that - and is
+only the horizon its advertised volatility is measured over. Changing it
+invalidates `model/specs/_stats_cache.json`, which holds that figure; `npm run
+warm` recomputes it with the local Python.
 
 ## Checking
 

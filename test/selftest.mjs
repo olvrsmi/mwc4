@@ -131,7 +131,7 @@ section('the opening')
      S.expect === 'world' && S.worlds.length === 3 && heads(last, /^Day 1$/) &&
      last.choices.filter((c) => /^[123]$/.test(c.token)).length === 3)
   ok('and the day names the week it is on the hook for',
-     has(last, /7 days left of probation/) && has(last, /\u20ac\$3,500/) && has(last, /budget of \u20ac\$1,000/))
+     has(last, /7 days left of probation/) && has(last, /\u20ac\$350/) && has(last, /budget of \u20ac\$1,000/))
   ok('and the brochure is not read to someone who was walked in', !has(last, /premier neo-market/))
   await game.start(S)
   ok('the opening does not play twice', !story.inSequence(S))
@@ -179,7 +179,8 @@ section('the offer and entering a world')
   const e = r.emissions.find((x) => x.kind === 'traces')
   ok('the chart carries what a renderer needs',
      e.priced.length === 1 && e.priced[0].length === S.world.info.n && e.holdings.length === S.world.info.n &&
-     e.foot.left === 't0' && /t9/.test(e.foot.right) && e.totalReadouts === 10 && e.upto === 0)
+     e.foot.left === 't0' && /t0/.test(e.foot.right) && e.upto === 0 && e.from === 0 &&
+     e.totalReadouts === game.rules.chartReadouts)
   ok('leave is offered at t0', r.choices.some((c) => c.token === 'l'))
   const left = await game.handle(S, 'l')
   ok('leaving at t0 is free and re-offers', S.world === null && S.expect === 'world' && has(left, /leave before anything/))
@@ -206,9 +207,25 @@ section('watching')
   ok('t8 still offers the choice, and still says nothing under the chart',
      S.world.readings.length === 9 && last.choices.some((c) => c.token === 'i') &&
      last.emissions.every((e) => !e.caption))
-  last = await game.handle(S, 'o')
-  ok('watching the whole world ends the round untouched', S.world === null && has(last, /staked nothing/) && S.expect === 'world')
-  ok('nine steps have passed', S.dayStep === 9 && game.summary(S).rounds === 1)
+
+  // A world has no length of its own any more: what was t9 is just another
+  // readout, and the only thing that ends one the player has not ended is the
+  // bell. The day is the whole of the rope.
+  for (let i = 0; i < 10; i++) last = await game.handle(S, 'o')
+  ok('a world runs past what used to be its last readout',
+     S.world !== null && S.world.readings.length === 19 && S.dayStep === 18 && S.expect === 'invest')
+  ok('and the paper is a window on the end of it, not the whole run',
+     (() => { const e = last.emissions.find((x) => x.kind === 'traces')
+              const w = game.rules.chartReadouts
+              return e.upto === 18 && e.from === 18 - (w - 1) &&
+                     e.foot.left === `t${18 - (w - 1)}` && /t18/.test(e.foot.right) })(),
+     JSON.stringify(last.emissions.find((x) => x.kind === 'traces')?.foot))
+  ok('with the whole run still on the emission, for the ladder and the listing price',
+     last.emissions.find((x) => x.kind === 'traces').priced.length === 19)
+
+  for (let i = 0; i < 9; i++) last = await game.handle(S, 'o')
+  ok('and the bell is what ends it', S.world === null && S.dayStep === 0 && S.dayIndex === 1 &&
+     heads(last, /^The Bell$/) && game.summary(S).rounds === 1)
 
   // Walking out of a world that has not moved the way it looked like it would
   // is a move, not a forfeit: the hours watching it are spent either way, and
@@ -402,18 +419,21 @@ section('probation')
     for (const pl of pls) { S.balance = S.budget + pl; S.investedToday = 1; last = game.closeDay(S) }
     return last
   }
-  // The bar is half of every budget the week is handed, which on a week that
-  // keeps clearing the quota is a little over 4,200 - so a week has to be
-  // properly good, not merely green.
+  // The bar is a twentieth of every budget the week is handed, which on a week
+  // that keeps clearing the quota is a little over 420 - so a week has to be
+  // green, rather than having to be a triumph.
   const won = mk(1)
   const lw = week(won.game, won.S, [1200, -50, 900, 700, 1100, 400, 1500])
-  ok('a week that clears half the week\'s budget passes probation',
+  ok('a week in profit passes probation',
      lw.verdict === 'passed' && won.S.probation === false, String(lw.target))
-  ok('and the bar it cleared was half of what it was handed',
-     Math.abs(lw.target - (1000 + 1100 + 1045 + 1150 + 1265 + 1392 + 1531) / 2) < 0.5, String(lw.target))
+  ok('and the bar it cleared was a twentieth of what it was handed',
+     Math.abs(lw.target - (1000 + 1100 + 1045 + 1150 + 1265 + 1392 + 1531) * 0.05) < 0.5, String(lw.target))
   const thin = mk(1)
-  ok('a merely profitable one does not',
-     week(thin.game, thin.S, [200, -50, 120, -30, 90, 40, 10]).verdict === 'failed')
+  ok('a thin week clears it, where half of the budget would not have',
+     week(thin.game, thin.S, [200, -50, 120, -30, 90, 40, 10]).verdict === 'passed')
+  const thinner = mk(1)
+  ok('and one thinner than the bar still does not',
+     week(thinner.game, thinner.S, [40, -50, 30, -30, 20, 10, 10]).verdict === 'failed')
   ok('probation pays no bonus - the week is the reward', lw.bonusPaid === 0 && won.S.bonus === 0)
   ok('and the week after does pay one - off probation, any profit is a week',
      week(won.game, won.S, [200, -50, 120, -30, 90, 40, 10]).bonusPaid === 100 && won.S.bonus === 100)
@@ -600,7 +620,8 @@ section('help and status')
   const h = await game.handle(S, 'help')
   const voice = (COPY.sequences[COPY.help_scene || HELP_SCENE] || []).length
   ok('help reads the voice out and lists the keys, touching nothing',
-     S.expect === 'holding' && heads(h, /^Commands$/) && texts(h).length === voice + 1, `${texts(h).length} lines`)
+     S.expect === 'holding' && heads(h, /^Commands$/) && h.emissions.length === voice + 1,
+     `${h.emissions.length} of ${voice + 1}`)
   const st = await game.handle(S, 'state')
   ok('status is its own message, and reads the day back mid-position',
      heads(st, /^Status$/) && has(st, /It's day 1, \d+ neo-hours remaining/) &&
@@ -967,6 +988,27 @@ section('the chart')
   ok('draws a ghost behind a held holding', isPng(png(3, rows(3, (k, q) => 100 * (q + 1) + k), { clean: rows(3, (k, q) => 100 * (q + 1) + k * 2), target: 1, interventionAt: 2 })))
   ok('draws across two decades', isPng(png(4, rows(4, (k, q) => 50 * Math.pow(4, q) + k))))
   ok('draws a single reading', isPng(png(3, rows(3, () => 400).slice(0, 1))))
+
+  // a market older than the paper: the window moves, the series does not get cut
+  const long = Array.from({ length: 30 }, (_, k) => [100 + k * 3, 200 - k * 2])
+  ok('draws a market that has outlived the window',
+     isPng(await renderEmission({
+       kind: 'traces', n: 2, holdings: ['AAA', 'BBB'], f: long, priced: long,
+       upto: 29, from: 15, totalReadouts: 15, target: 0, interventionAt: 2,
+       title: 'test', foot: { left: 't15', right: 't29 . log scale' },
+     })))
+  ok('and one whose window has not started moving yet',
+     isPng(await renderEmission({
+       kind: 'traces', n: 2, holdings: ['AAA', 'BBB'], f: long.slice(0, 5), priced: long.slice(0, 5),
+       upto: 4, from: 0, totalReadouts: 15, target: 0, interventionAt: 2,
+       title: 'test', foot: { left: 't0', right: 't4 . log scale' },
+     })))
+  ok('a from beyond the last reading does not fold the paper inside out',
+     isPng(await renderEmission({
+       kind: 'traces', n: 2, holdings: ['AAA', 'BBB'], f: long.slice(0, 3), priced: long.slice(0, 3),
+       upto: 2, from: 99, totalReadouts: 15, target: 0, interventionAt: null,
+       title: 'test', foot: { left: 't0', right: 't2 . log scale' },
+     })))
   ok('refuses what it cannot draw', await throws(() => renderEmission({ kind: 'text', text: 'x' })))
   // the real thing: what a round emits renders
   const { game, S } = mk(70)

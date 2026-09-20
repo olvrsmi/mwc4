@@ -16,16 +16,20 @@
 // TIME IS TURN-BASED. Nothing moves until the player does. One step of a
 // world - t3 to t4, whether watched or held - is one step of the game clock,
 // and so is an hour the player spends waiting, which moves no world at all.
-// A day is `daySteps` of them (27: three worlds of nine), a week is `weekDays`
-// days, and a position still open when the day's last step lands is closed
-// where it stands. There are no timers anywhere.
+// A day is `daySteps` of them (27), a week is `weekDays` days, and a position
+// still open when the day's last step lands is closed where it stands.
+//
+// A WORLD HAS NO LENGTH OF ITS OWN. It runs for as long as the player stays
+// in it: they leave, they close, or the bell closes them. So the day is the
+// only clock, and how far a world can be taken is however much of the day is
+// left when it was entered. There are no timers anywhere.
 //
 // A turn is handle(S, token) -> { emissions, choices, summary }. Emissions are
 // what a renderer shows:
 //
 //   { kind: 'text',   text, speaker?, title?, voice? }
 //   { kind: 'art',    art, text?, speaker?, title?, voice? }   a named picture
-//   { kind: 'traces', title, caption, n, holdings, priced, clean, upto,
+//   { kind: 'traces', title, caption, n, holdings, priced, clean, upto, from,
 //                     totalReadouts, target, interventionAt, foot, f }
 //
 // Each also carries `delay`, the milliseconds a client waits before showing it
@@ -48,8 +52,17 @@ import * as story from './story.mjs'
 import { withDelays } from './pacing.mjs'
 
 export const DEFAULT_RULES = {
-  steps: 10,            // readouts per world: t0..t9, so nine steps
-  daySteps: 27,         // world steps in a game day - three worlds of nine
+  // The horizon a world's advertised volatility is measured over, and nothing
+  // else: a world runs until the day ends it. model/specs/_stats_cache.json is
+  // keyed <id>@<steps>, so changing this costs the prospectus its volatility
+  // figure until `npm run warm` recomputes it.
+  steps: 10,
+  daySteps: 27,         // world steps in a game day, and the whole of a world's rope
+  // How many readouts a chart shows at once. A world can outrun the paper, so
+  // what is drawn is the most recent window of it and the rest ages off the
+  // left. host/render.mjs rules 14 squares, one to the readout, which is the
+  // 15 fenceposts this counts.
+  chartReadouts: 15,
   weekDays: 7,
   startBudget: 1000,    // the day's allowance, never carried over
   budgetFloor: 500,
@@ -57,7 +70,7 @@ export const DEFAULT_RULES = {
   budgetDown: 0.95,     // after any other day, idle ones included
   quota: 0.10,          // the share of the budget a day must clear to count
   probation: true,      // a new desk has a week to post a profit
-  probationShare: 0.5,  // of every budget the week is handed, the share it must clear
+  probationShare: 0.05, // of every budget the week is handed, the share it must clear
   weekBonus: 100,       // paid into the personal pot, only after probation
   upgradeCost: 10,      // one increment of regeneration, out of the day's budget
   regenSteps: 9,        // steps of watching that restore a spent qubit fully
@@ -147,7 +160,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       beatsSeen: [], beat: null, unlocked: [], // beats
       expect: 'boot',
       worlds: null,                // the three on offer
-      world: null,                 // the one entered: {info, name, holdings, readouts, circuit, readings}
+      world: null,                 // the one entered: {info, name, holdings, circuit, readings}
       pending: null,               // a stake being placed
       run: null,                   // an open position
     }
@@ -170,7 +183,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       rounds: S.rounds,
       upgradesToday: S.upgradesToday,
       world: S.world ? { id: S.world.info.id, name: S.world.name, n: S.world.info.n,
-                         readout: k, readouts: S.world.readouts } : null,
+                         readout: k, left: stepsLeft(S) } : null,
       position: S.run ? { holding: C.holding(S.run.target, S.run.holdings), target: S.run.target,
                           stake: S.run.stake, investAt: S.run.investAt } : null,
       inScene: story.inSequence(S),
@@ -522,10 +535,25 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     return [playerText(C.t('scenes.offer'))]
   }
 
-  /** The numbers behind a chart. What is drawn is the quote, not the reading. */
+  /**
+   * The numbers behind a chart. What is drawn is the quote, not the reading.
+   *
+   * The whole run goes on the emission and `from` says where the paper starts:
+   * a world runs for as long as the day allows, which is further than any
+   * sheet can hold, so the chart is a window on the most recent
+   * `chartReadouts` and everything older ages off the left edge rather than
+   * the whole run being squeezed onto one page.
+   *
+   * It is a window and not a slice because the readings before it are still
+   * worth having: the listing price a holding opened at is the one point on
+   * its line the player was given rather than found, and the price ladder is
+   * hung off the whole run so that it never rescales under a player watching
+   * it. Both are readings the paper no longer shows.
+   */
   function tracesPanel (S, { upto, target = null, interventionAt = null, title, clean = null }) {
     const info = S.world.info
     const rows = S.world.readings.slice(0, upto + 1)
+    const from = Math.max(0, upto - (R.chartReadouts - 1))
     const bases = Array.from({ length: info.n }, (_, q) => basePrice(info, q, R.price))
     const price = (row) => row.map((r, q) => quote(bases[q], r, R.price))
     return {
@@ -534,8 +562,11 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       holdings: S.world.holdings,
       world: S.world.name,
       upto,
-      totalReadouts: S.world.readouts,
+      from,
+      totalReadouts: R.chartReadouts,
       target,
+      // left where it happened, so a coupling older than the window falls off
+      // the paper with the readouts around it
       interventionAt,
       // the value factor, not the raw reading: one number per holding per step,
       // which is the whole of what the quote above it is made of
@@ -544,8 +575,8 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       clean: clean ? clean.map(price) : null,
       title,
       foot: {
-        left: C.moment(0),
-        right: `${C.moment(S.world.readouts - 1)}  .  ${C.t('plots.traces_legend')}`,
+        left: C.moment(from),
+        right: `${C.moment(upto)}  .  ${C.t('plots.traces_legend')}`,
       },
     }
   }
@@ -622,7 +653,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   async function enterWorld (S, i) {
     const w = S.worlds[i - 1]
     const first = await model.step({ world: w.info.id, circuit: null, enter: null, couple: null })
-    S.world = { info: w.info, name: w.name, holdings: w.holdings, readouts: R.steps,
+    S.world = { info: w.info, name: w.name, holdings: w.holdings,
                 circuit: first.circuit, readings: [first.r] }
     const pr = prospectus(C, w.info)
     const entered = titled('entered', {
@@ -642,10 +673,9 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     S.world.circuit = next.circuit
     S.world.readings.push(next.r)
     passStep(S)
-    const k = S.world.readings.length - 1
     const panel = sceneInvestment(S)
+    // the bell is the only thing that ends a world the player has not ended
     if (bellDue(S)) return [...panel, ...endOfDay(S), ...endRound(S)]
-    if (k >= S.world.readouts - 1) return [...panel, text(C.t('scenes.observed_all')), ...endRound(S)]
     return panel
   }
 
@@ -675,7 +705,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
         target: q, holding: C.holding(q, S.world.holdings),
         opened_at: money(at), opened_at_raw: at,
         stake: money(stake), stake_raw: stake,
-        last: C.moment(S.world.readouts - 1), every: describeSteps(1),
+        left: inSteps(stepsLeft(S)), every: describeSteps(1),
       })),
       openPanel(S),
     ]
@@ -701,9 +731,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     if (b) { r.cleanCircuit = b.circuit; r.clean.push(b.r) }
     passStep(S, { holding: true })
 
-    const k = S.world.readings.length - 1
     const out = [readoutPanel(S)]
-    if (k >= S.world.readouts - 1) return [...out, ...closeOut(S)]
     if (bellDue(S)) { r.forced = true; return [...out, ...closeOut(S)] }
     return out
   }
