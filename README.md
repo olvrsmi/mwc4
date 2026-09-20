@@ -58,6 +58,7 @@ mackenziewalk_04/
     model-http.mjs   the physics via the Moth API's qdrive-api-v1 engine
     render.mjs       a traces emission drawn as a PNG, and the art lookup
     store.mjs        one JSON file per session
+    mirror.mjs       a browser turn said again in the chat, when both are on
     art/ fonts/      pictures the scenes name; the chart's typefaces
   client-http/     a web page. server.mjs, index.html, app.js
   client-telegram/ a Telegram bot. bot.mjs, sticker.mjs
@@ -249,6 +250,14 @@ joins the browser and the chat into one game:
 It needs `MW_BOT_USERNAME`, and it needs the deployed domain registered with
 `/setdomain` in BotFather. Without that the widget renders and then signs nobody
 in, with no error anywhere.
+
+Once they are joined, a turn taken in the browser is also spoken into the chat -
+`host/mirror.mjs`, wired up in `server.mjs`, and only there, so `npm run web`
+and `npm run telegram` apart behave as they always did. It goes one way only:
+the browser replays the saved transcript whenever the page is opened, so a day
+played in Telegram is already there on the next reload. The chat is not sent a
+turn it cannot receive either - somebody who signed in on the website and never
+opened the chat costs one line in the log, because a bot may not speak first.
 
 In the chat, every choice arrives as an inline button and as a token you could
 have typed, so the whole game is playable either way. Slash commands are
