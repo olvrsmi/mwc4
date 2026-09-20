@@ -205,7 +205,7 @@ scenes:
     Each upgrade buys 1nh worth of recovery costing {unit_cost} from your day's budget.
 
     Coherence {coherence}{#if recovering} · Recovery in {recovery}{/if}
-    Current balance {balance} • Upgrades owned {upgrades}
+    Current balance {balance} • Upgrades today {upgrades}
 
   # What a purchase came to. The terminal takes what it has room for and is
   # charged for that alone, so {bought} can be fewer than {wanted} — which is
@@ -706,6 +706,10 @@ sequences:
       speaker: Navinder
       text: |
         Right, right. Let me show you round the FOOMBERG terminal.
+    
+    - voice: player
+      text: |
+        _A disembodied voice starts talking, Navinder doesn't stop explaining (maybe he can't hear it) but you can't hear him any more. It's weirdly present, and feels like some placeholder text in an unfinished world to you..._
 
   # The voice, on its own, because /help plays it again. Splitting it out is
   # what stops the words existing twice: a second copy for /help would drift
@@ -716,16 +720,16 @@ sequences:
   # scene that stops to ask something would leave the player holding a
   # question instead of a holding - copy-check refuses one.
   tutorial:
-    - speaker: Disembodied Voice
-      text: |
-        _A disembodied voice starts talking, Navinder doesn't stop explaining (maybe he can't hear it) but you can't hear him any more. It's weirdly present, and feels like some placeholder text in an unfinished world to you..._
-
+    - art: mwc_logo
+      speaker: Disembodied Voice
+      text: |        
         **The Markets**
         Welcome to Mackenzie Walk Capital, a post AGI investment company focussed on Neo-markets. You'll need to make a significant profit in your first week to pass probation and impress the founders.
         
         Since AGI took off in late 2028 Neo-markets have become a significant focus of investment and it’s estimated that the number of these increasingly small markets (betting on the changes of atomic or subatomic systems) doubles every 3 days, and this rate of doubling has itself doubled in the last month. There are rumours, posts, unsubstantiated pieces of independent research, and even a few early Arxiv.org preprints that suggest that observing, modelling and investing in these systems is changing them, scare words like decoherence, collapse are beginning to float around the discourse.
 
-    - speaker: Disembodied Voice
+    - art: example_graph1
+      speaker: Disembodied Voice
       text: |
         **The Terminal**
 
@@ -739,7 +743,8 @@ sequences:
 
      
 
-    - speaker: Disembodied Voice
+    - art: example_graph2
+      speaker: Disembodied Voice
       text: |
         **Investment**
 
@@ -747,7 +752,7 @@ sequences:
 
         This coupling can change the outcome of the market, and skilled traders can sense when and how to invest even if the entity doesn't look clasically profitable.
 
-        The coupling also changes the state of your terminal, causing it to lose coherence and necessitating some recovery time, particularly from bad trades. The company has an internal marketplace from which you can purchase upgrades to the recovery process.
+        The coupling also changes the state of your terminal, causing it to lose coherence and necessitating some recovery time, particularly from bad trades. You can spend €$ to speed this up in the in-terminal FOOMBERG™ store.
 
     - speaker: Disembodied Voice
       text: |
