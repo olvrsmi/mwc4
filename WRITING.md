@@ -68,6 +68,7 @@ sequences:
 | `voice` | `player` for a line spoken by or about the player. See [Sides](#sides) |
 | `choices` | keyed `a`, `b`, `c`… - **any number**. Each has a `label` and a `reply`, and may carry its own `art`, `speaker`, `title` and `voice` |
 | `ask` | capture what the player types next into a named variable |
+| `max` | characters to clamp that answer to. 60 by default |
 | `delay` | seconds to wait before this line arrives - see [Timing](#timing) |
 
 Choices **colour the moment and rejoin**: the reply plays, then the scene
@@ -136,16 +137,32 @@ the heading over what they said.
     - speaker: Himbo
       text: What do we call you?
       ask: name
+      max: 7
     - speaker: Himbo
       text: |
         Alright, {name}. This way.
 ```
 
+An `ask` has **no buttons under it** - nothing to press is the whole of how a
+player knows to answer it in their own words. So do not give the same node
+`choices` as well; a node carrying both offers the choices and never asks.
+
+A scene stopped on an `ask` **cannot be skipped past**: the answer is the
+player's own and the game carries it from there, so `skip` is refused until
+the question has been answered. Which means an `ask` in the opening is a
+question everybody answers.
+
 Whatever they type is stored and readable as `{name}` in every later line of
-every scene. It is trimmed, cut to 60 characters (by character, so an answer
-of emoji cannot come back broken), and has `` ` ``, `*` and `_` removed. Those
-three are the delimiters of the markdown below, and a player who typed one
-would otherwise swallow the emphasis in whatever line you put their answer in.
+every scene. It is trimmed to one line, cut to `max` characters - 60 unless
+you say otherwise, and by character, so an answer of emoji cannot come back
+broken - and has `` ` ``, `*` and `_` removed along with anything invisible.
+Those three are the delimiters of the markdown below, and a player who typed
+one would otherwise swallow the emphasis in whatever line you put their answer
+in. An answer with nothing left in it after all that is not an answer: the
+question stands and they are asked again.
+
+Name it only in scenes that cannot be reached without it. The opening can be
+**skipped**, and a `{name}` nobody supplied renders as the word `{name}`.
 
 ### Effects
 

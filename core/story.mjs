@@ -6,9 +6,9 @@
 //
 // SEQUENCES (copy.yaml `sequences:`) have the floor while they run. A node may
 // carry `art`, `speaker`, `text`, `choices` (keyed a, b, c... any number) and
-// `ask` (capture what the player types into a named variable). Choices colour
-// the moment and rejoin: the reply plays, then the scene carries on. There is
-// no branching to track.
+// `ask` (capture what they type into a named variable, clamped to the node's
+// `max` characters). Choices colour the moment and rejoin: the reply plays,
+// then the scene carries on. There is no branching to track.
 //
 // A node may also say who is talking and what heads the line: `voice: player`
 // for a line spoken by or about the player, and `title:` for a heading over
@@ -100,11 +100,24 @@ const beatLine = (copy, id, spec, body) =>
  * at the one place a player's own words enter the copy, rather than in every
  * renderer that has to render them.
  *
- * Sliced by code point, so an answer made of emoji cannot be cut through the
- * middle of a surrogate pair and left as a broken half in the saved game.
+ * So are the characters that are not characters: a control code, and a
+ * formatting one such as a right-to-left override, which is invisible and
+ * reorders every line it is dropped into. Runs of whitespace close up behind
+ * them, so what comes back is one line however many the player sent.
+ *
+ * `max` is the writer's, set beside the `ask` in copy.yaml - initials want
+ * seven, a sentence wants the sixty every answer gets by default. Sliced by
+ * code point, so an answer made of emoji cannot be cut through the middle of
+ * a surrogate pair and left as a broken half in the saved game.
  */
-export const capture = (raw) =>
-  [...String(raw ?? '').replace(/[`*_]/g, '')].slice(0, 60).join('').trim()
+export const capture = (raw, max = 60) =>
+  [...String(raw ?? '')
+    .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
+    .replace(/[`*_]/g, '')
+    .replace(/\s+/g, ' ')]
+    .slice(0, Math.max(1, Math.round(Number(max) || 60)))
+    .join('')
+    .trim()
 
 /** Apply a node's or a choice's effects. Only two things a beat may touch. */
 export function applyEffects (S, spec) {
@@ -171,11 +184,34 @@ export function narrate (copy, S, id) {
   return nodes.flatMap((node) => nodeEmit(copy, S, node || {}, node?.text, { id, pace: false }))
 }
 
-/** The choices a scene is waiting on, or none. */
-export function sequenceChoices (copy, S) {
-  if (!S.seq || S.seq.awaiting !== 'choice') return []
+/**
+ * Is the running scene waiting on something the player has to type?
+ *
+ * Asked by the one caller that has to know the difference: a scene stopped on
+ * a choice can be skipped past, and a scene stopped on an `ask` cannot - the
+ * answer is the player's own and the game carries it from there, so there is
+ * nothing sensible to skip it with. Read off the node, like everything else
+ * here that could be wrong about what is on offer.
+ */
+export function awaitingAsk (copy, S) {
+  if (!S.seq) return false
   const node = seqNodes(copy, S)[S.seq.at] || {}
-  return Object.entries(node.choices || {})
+  return Boolean(node.ask) && !node.choices
+}
+
+/**
+ * The choices a scene is waiting on, or none - an `ask` has none, and is
+ * answered in the player's own words.
+ *
+ * Read off the node rather than off `awaiting`, for the reason answerSequence
+ * does: the two have to agree about what is on offer, and the node is what
+ * either of them would be wrong about.
+ */
+export function sequenceChoices (copy, S) {
+  if (!S.seq) return []
+  const node = seqNodes(copy, S)[S.seq.at] || {}
+  if (!node.choices || typeof node.choices !== 'object') return []
+  return Object.entries(node.choices)
     .map(([token, c]) => ({ token, label: copy.render(String(c?.label ?? token), seqCtx(S)) }))
 }
 
@@ -187,16 +223,27 @@ export function sequenceChoices (copy, S) {
 export function answerSequence (copy, S, raw) {
   if (!S.seq) return null
   const node = seqNodes(copy, S)[S.seq.at] || {}
+  // What the node wants NOW, rather than what it wanted when the game was
+  // saved. A writer who turns a choice into an ask has sessions sitting on the
+  // old one, and `awaiting` alone would leave them answering a question that
+  // is no longer on the page - refused every time, with only `skip` out.
+  const awaiting = node.choices ? 'choice' : (node.ask ? 'ask' : S.seq.awaiting)
 
-  if (S.seq.awaiting === 'ask') {
-    S.vars[String(node.ask)] = capture(raw)
+  if (awaiting === 'ask') {
+    const said = capture(raw, node.max)
+    // Nothing usable - an empty message, or one made of nothing but the
+    // delimiters that get stripped. The question stands rather than being
+    // answered with a blank, which would then be interpolated into every
+    // later line that names it.
+    if (!said) return null
+    S.vars[String(node.ask)] = said
     applyEffects(S, node)
     S.seq.at += 1
     S.seq.awaiting = null
     return runSequence(copy, S)
   }
 
-  if (S.seq.awaiting !== 'choice') return null
+  if (awaiting !== 'choice') return null
   const choice = (node.choices || {})[String(raw ?? '').trim().toLowerCase()]
   if (!choice) return null
   applyEffects(S, choice)

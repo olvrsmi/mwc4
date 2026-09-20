@@ -66,6 +66,13 @@ async function harness ({ fail = null, seedDir = null } = {}) {
   return { ...made, sent, dir, game, cleanup: () => (seedDir ? Promise.resolve() : rm(dir, { recursive: true, force: true })) }
 }
 
+/**
+ * Past the opening. It asks the player their name before it will be skipped,
+ * so a test that only wants to be in the game answers that first. The chat
+ * must already exist: the first message to a new one only walks them in.
+ */
+const enter = async (bot, id) => { await say(bot, 'OJS', id); await say(bot, 'skip', id) }
+
 let updateId = 0
 // In a private chat - the only kind the bot answers - Telegram's chat.id and
 // from.id are the same number, and the bot keys a game on the user. These
@@ -219,6 +226,14 @@ section('a conversation')
   ok('every message is HTML', msgs(h.sent).every((s) => s.payload.parse_mode === 'HTML'))
   ok('the typing indicator is raised', h.sent.some((s) => s.method === 'sendChatAction'))
 
+  // The opening asks the player their name before it offers them anything,
+  // and an ask has no choices on it - nothing to press is the whole of how a
+  // player knows to answer it in their own words.
+  ok('an ask sends no keyboard at all', h.sent.filter((s) => kbOf(s)).length === 0,
+     `${h.sent.filter((s) => kbOf(s)).length}`)
+
+  h.sent.length = 0
+  await say(h.bot, 'OJS')
   const withKb = h.sent.filter((s) => kbOf(s))
   ok('exactly one message in the burst carries the keyboard', withKb.length === 1, `${withKb.length}`)
   ok('and it is the last thing sent',
@@ -229,8 +244,10 @@ section('a conversation')
   await say(h.bot, 'skip')
   ok('skip reaches the game', texts(h.sent).some((t) => /\*\*Day 1\*\*|Day 1/.test(t)))
   const kb = kbOf(h.sent.filter((s) => kbOf(s)).at(-1)).flat()
-  ok('three worlds and the workshop are offered',
-     kb.filter((b) => /^[123]$/.test(b.callback_data)).length === 3 && kb.some((b) => b.callback_data === 'm'), JSON.stringify(kb.map((b) => b.callback_data)))
+  ok('three worlds, an hour to spare and the workshop are offered',
+     kb.filter((b) => /^[123]$/.test(b.callback_data)).length === 3 &&
+     kb.some((b) => b.callback_data === 'wait') && kb.some((b) => b.callback_data === 'm'),
+     JSON.stringify(kb.map((b) => b.callback_data)))
 
   h.sent.length = 0
   await tap(h.bot, '1')
@@ -269,7 +286,7 @@ section('/start, /restart and the commands')
     message: { message_id: ++updateId, date: 0, text: '/start', entities: [{ type: 'bot_command', offset: 0, length: 6 }], chat: { id: 42, type: 'private' }, from: { id: 42, is_bot: false, first_name: 'T' } },
   })
   ok('/start on a new chat plays the opening', h.sent.some((s) => s.method === 'sendSticker'))
-  await say(h.bot, 'skip')
+  await enter(h.bot)
   for (const t of ['1', 'i', '500', '0', '5']) await say(h.bot, t)
   const before = (await h.host.store.load(sessionId('42'))).session
   ok('a game is under way', before.run !== null && before.balance === 500)
@@ -298,10 +315,8 @@ section('/start, /restart and the commands')
 section('two chats do not touch each other')
 {
   const h = await harness()
-  await say(h.bot, 'skip', 42)
-  await say(h.bot, 'skip', 99)
-  await say(h.bot, 'skip', 42)
-  await say(h.bot, 'skip', 99)
+  await say(h.bot, 'hi', 42); await enter(h.bot, 42)
+  await say(h.bot, 'hi', 99); await enter(h.bot, 99)
   for (const t of ['1', 'i', '300', '0', '3']) await say(h.bot, t, 42)
   const a = (await h.host.store.load(sessionId('42'))).session
   const b = (await h.host.store.load(sessionId('99'))).session
@@ -320,7 +335,7 @@ section('a keyboard from four messages ago')
   // stale tap is not inert, it is a different legal move.
   const h = await harness()
   await say(h.bot, 'hi')
-  await say(h.bot, 'skip')
+  await enter(h.bot)
   await say(h.bot, '1')
   await say(h.bot, 'i')
   const before = h.game.summary((await h.host.store.load(sessionId('42'))).session)
@@ -367,6 +382,7 @@ section('every token Telegram will be asked to carry')
     }
   }
   await say(h.bot, 'hi'); await check()
+  await say(h.bot, 'OJS'); await check()
   await say(h.bot, 'skip'); await check()
   for (const t of ['m', 'b', '2', 'l', '1', 'o', 'i', '250', '1', '5', 'h', 'c']) {
     await say(h.bot, t)
@@ -426,7 +442,7 @@ section('when Telegram says no')
       return null
     },
   })
-  await say(flaky.bot, 'skip')
+  await say(flaky.bot, 'hello')
   ok('a transient failure is retried rather than losing the turn', hits > 2 && msgs(flaky.sent).length > 2, `${hits} attempts`)
   await flaky.cleanup()
 
@@ -447,7 +463,7 @@ section('when Telegram says no')
   // a chart that will not draw costs the picture, not the turn
   {
     const h = await harness()
-    await say(h.bot, 'hi'); await say(h.bot, 'skip')
+    await say(h.bot, 'hi'); await enter(h.bot)
     h.sent.length = 0
     // an emission the renderer cannot draw: no series to plot
     const broken = { kind: 'traces', n: 2, holdings: ['AA', 'BB'], priced: null, f: null,
@@ -462,7 +478,7 @@ section('when Telegram says no')
   const dir = await mkdtemp(join(tmpdir(), 'mw4-tg-lost-'))
   const warm = await harness({ seedDir: dir })
   await say(warm.bot, 'hello')      // the first message to a new chat only walks them in
-  await say(warm.bot, 'skip')
+  await enter(warm.bot)
   await say(warm.bot, '1')
   const at = (await warm.host.store.load(sessionId('42'))).session.world.readings.length
   const dead = await harness({ seedDir: dir, fail: (m) => (m === 'sendPhoto' ? Object.assign(new Error('nope'), { error_code: 403 }) : null) })

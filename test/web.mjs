@@ -104,7 +104,8 @@ function login (id, first_name = 'Ada', { token = TOKEN, skew = 0 } = {}) {
 /** Play far enough in that the game is plainly someone's week. */
 async function playOn (b) {
   await b.post('/api/session')
-  for (const t of ['skip', '1', 'o', 'i', '100', '0', '5']) await b.post('/api/say', { text: t })
+  // the opening asks their name before it will be skipped past
+  for (const t of ['OJS', 'skip', '1', 'o', 'i', '100', '0', '5']) await b.post('/api/say', { text: t })
   return (await b.post('/api/session')).body
 }
 

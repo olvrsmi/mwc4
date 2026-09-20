@@ -176,6 +176,22 @@ scenes:
 
   left: You leave before anything is committed.
   observed_all: You observed the whole circuit and staked nothing. Your qubit is untouched.
+
+  # An hour spent on nothing at all. No world moves — a world moves when you
+  # move it — so what this buys is the clean-up a step of watching would have
+  # brought, without a world's readouts being spent to get it. It costs the
+  # hour out of the day's 27 like any other.
+  #
+  # {elapsed} {gained} {recovered} {coherence} {recovering} {recovery}
+  # {steps_left} {day_left}
+  waited: >-
+    _You sit it out for {elapsed}._ Coherence {coherence}{#if recovering}
+    (recovery in {recovery}){:else} — clean{/if}
+
+  # Waiting, refused. The coupling is what spends the terminal and it runs for
+  # exactly as long as the position does, so an hour of it cannot be sat out.
+  cannot_wait: "Your position is open — time only moves while you hold it."
+
   broke_title: The walk ends here
   broke: You are out of money.
   nothing_to_stake: You have nothing left to stake.
@@ -183,16 +199,28 @@ scenes:
 
   # {recharge} {unit_cost} {coherence} {balance} {budget} {bonus} {units}
   # {upgrades} {recovering} {recovery}
-  marketplace_title: The workshop
+  marketplace_title: FOOMBERG™ In-Terminal Purchases
   marketplace: |
-    A spent investment-bit cleans up on its own in {recharge}. Each upgrade buys a quarter again, once, for {unit_cost} out of today's budget.
+    Your terminal's coherence recovers in {recharge}. Reduced coherence makes bad investments more likely.
+    Each upgrade buys 1nh worth of recovery costing {unit_cost} from your day's budget.
 
-    Coherence {coherence} · today's balance {balance}
-    Upgrades owned {upgrades}{#if recovering}
-    Clean again in {recovery}{/if}
+    Coherence {coherence}{#if recovering} · Recovery in {recovery}{/if}
+    Current balance {balance} • Upgrades owned {upgrades}
 
-  # {bought} {spent} {upgrades} {recovery}
-  upgraded: "{bought} bought for {spent}. {upgrades} owned — clean-up now takes {recovery}."
+  # What a purchase came to. The terminal takes what it has room for and is
+  # charged for that alone, so {bought} can be fewer than {wanted} — which is
+  # what {capped} says, and the only reason this message mentions it.
+  #
+  # {bought} {wanted} {capped} {spent} {upgrades} {gained} {coherence}
+  # {recovering} {recovery}
+  upgraded: >-
+    {#if capped}Your terminal only had room for {bought}. {/if}{bought} bought for
+    {spent} — coherence {coherence}{#if recovering}, clean in {recovery}{:else}, clean{/if}.
+
+  # Nothing to sell. An hour of recovery sold onto a full meter is an hour that
+  # goes nowhere, so the shop does not take the money for it.
+  already_clean: "Your terminal is already clean — an upgrade would do nothing for it."
+
   # {cost} {balance}
   cannot_afford: "An upgrade is {cost} and you have {balance}."
 
@@ -256,10 +284,19 @@ prompts:
   help_title: Commands
   help: |
     `status` to see current time, funds and coherence
+    `wait` to let a neo-hour pass and let your terminal clean up
     You can type any number, as well as selecting presets.
   say_something: Say something, or type **help**.
   # shown when a player types something a running scene has no answer for
   scene_waiting: _Someone is still talking. Answer them, or **skip**._
+  # The same, where the scene is waiting on something typed rather than
+  # pressed. There is no skipping one of those — the answer is yours and the
+  # game carries it from there — so this does not offer it.
+  ask_first: _Answer them. This one cannot be skipped._
+  # The same, for a setpiece that opened the day and is waiting on an answer.
+  # It holds the day's worlds back until it has one, and unlike a scene there
+  # is no skipping it — so this does not offer that.
+  beat_waiting: _Answer them first._
   nothing_to_decide: Nothing to decide just now.
   # A chat client leaves every keyboard it has ever sent tappable, and the
   # same token means different things in different moments - so a tap on an
@@ -272,6 +309,9 @@ buttons:
   # which is exactly what either of these buys
   observe: Observe for 1nh
   leave: Leave
+  # one neo-hour spent on nothing, so a spent terminal can clean up without a
+  # world having to be watched through to do it
+  wait: Wait 1nh
   marketplace: Marketplace
   status: Status
   # new in 04: a position is stepped by hand and closed whenever the player says
@@ -521,17 +561,21 @@ sequences:
     - art: himbo
       speaker: Daniel
       text: |
-        There you are, you made it past security. I should tell them to sharpen up haha
+        There you are, you made it past security again, the final step of the interview process haha. I, er, have your card here somewhere. What's your name again? Just the initials is fine, we've got a lot of you starting today.
 
-        _Holds out lanyard_
-      choices:
-        a:
-          label: Take it
-          speaker: Daniel
-          reply: |
-            Thats you, welcome to MWC. Welcome to the future!
-            
-            Follow me.
+        _He starts shuffling through a massive pile of laminated cards_
+      # Whatever they type is their name from here on, readable as {initials}
+      # in any later line of any scene. `max` clamps it — initials, not a
+      # sentence — and the answer is stripped of anything that would break the
+      # line it lands in. There are no buttons on an ask: it is typed.
+      ask: initials
+      max: 7
+
+    - speaker: Daniel
+      text: |
+        {initials|upper}... {initials|upper}... here we go, that's you. Welcome to MWC, welcome to the future!
+
+        Follow me.
 
     - voice: player
       text: |
@@ -715,7 +759,7 @@ sequences:
         - you receive a {daily_budget} baseline daily budget 
         - if you end the day with a more than 10% profit your budget is increased by 10% the next day
         - if not, it's reduced by 5%
-        - you must make a profit of 50% or more of your weekly total budget - {week_target} at baseline, but subject tochange as your budget does
+        - you must make a profit of 50% or more of your weekly total budget - {week_target} at baseline, but subject to change as your budget does
         - if you fail you can keep trying, but normally only the nepo-hires have funds for that
 
   # --- the verdicts ---------------------------------------------------------

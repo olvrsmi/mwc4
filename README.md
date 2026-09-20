@@ -147,9 +147,16 @@ watching or holding - is one step of the game clock, and:
 | the bell | the day's 27th step closes any open position where it stands |
 | the night | restores a spent qubit by nine steps' worth |
 
-Entering a world and leaving it at t0 cost nothing. Your qubit recovers a
-ninth per step while you watch, not while you hold; the workshop sells a
-quarter more per step, once, out of the day's budget.
+Entering a world and leaving it cost nothing; the hours spent watching it are
+spent either way. `wait` is the one step that moves no world at all - the hour
+goes, the qubit recovers, and every world stands where it stood, which is how
+a spent terminal is cleaned up without a world's readouts going with it.
+
+Your qubit recovers a ninth per step while you watch or wait, not while you
+hold, and nothing buys a faster clock than that. What the workshop sells is
+the hour itself: €$10 out of the day's budget, one step's worth of recovery,
+handed over on the spot. It will not sell more than the terminal has room for,
+and charges only for what lands.
 
 ## The day
 
@@ -178,12 +185,17 @@ so free text keeps working.
 | | |
 |---|---|
 | `1` `2` `3` | enter one of the three worlds on offer · `m` the workshop |
-| `i` `o` `l` | invest, observe one more step, or leave (only at t0) |
+| `i` `o` `l` | invest, observe one more step, or leave - at any point, having watched or not |
 | a number, twice | the stake, then the holding |
 | `h` `c` | hold one more step, or close where it stands |
-| `b` `l` | buy upgrades, or leave the workshop |
+| `b` `l` | buy hours of recovery, or leave the workshop |
+| `wait` | let one step pass with nothing in it, anywhere but mid-position |
 | `help` `state` | the rules read out again, and your standing; either works mid-position |
 | `skip` | end the opening scenes |
+
+A setpiece that opens a day and asks something holds the day's worlds behind
+it: its choices would otherwise arrive in the same row as the three worlds,
+with nothing on screen to say which question a keystroke was answering.
 
 ## Clients
 
@@ -366,7 +378,7 @@ chat can be read back in the browser with its pictures. Charts older than
 All optional, all in `.env.example`: `MW_STEPS` (10 readouts a world),
 `MW_DAY_STEPS` (27), `MW_WEEK_DAYS` (7), `MW_REGEN_STEPS` (9),
 `MW_NIGHT_STEPS` (9), `MW_START_BUDGET`, `MW_BUDGET_FLOOR`, `MW_QUOTA`,
-`MW_WEEK_BONUS`, `MW_UPGRADE_COST`, `MW_PROBATION`, `MW_PROBATION_SHARE`,
+`MW_WEEK_BONUS`, `MW_UPGRADE_COST` (€$10 an hour), `MW_PROBATION`, `MW_PROBATION_SHARE`,
 `MW_COUNTERFACTUAL`, `PORT`, `MW_BIND`, `MW_STATE_DIR`, `MW_SECRET`,
 `MW_BOT_USERNAME`, `MW_PUBLIC_URL`, `MW_TRUST_PROXY`, `MW_SWEEP_DAYS`.
 

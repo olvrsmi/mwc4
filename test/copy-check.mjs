@@ -46,13 +46,27 @@ const walk = async () => {
   }
 }
 const say = async (...tokens) => { for (const t of tokens) await game.handle(S, t) }
+await say('skip')                                                  // refused: the opening asks a name first
 await walk()
+await say('1', 'wait')                                             // an hour spent on nothing
 await say('1', 'o', 'i', '250', '1', ...Array(8).fill('h'))        // watched, then held to the end of the world
-await say('1', 'i', '100', '0', 'h', 'c')                          // closed by hand
+await say('1', 'i', '100', '0', 'h', 'wait', 'c')                  // waiting is refused, then closed by hand
 S.dayStep = 26
 await say('1', 'i', '100', '0', 'h')                               // the bell closes it, and the day
 await say('1', 'o', 'l')                                           // a nudge or two
-await say('m', 'b', '10', 'l')                                     // the workshop
+S.coherence = 0.2
+await say('m', 'b', '10', 'l')                                     // the workshop, capped at what the terminal takes
+S.coherence = 1
+await say('m', 'b', '1')                                           // which sells a clean terminal nothing
+S.coherence = 0.2; S.balance = 5
+await say('b', '1', 'l')                                           // nor anything at all to an empty pocket
+// a setpiece that asks something holds the day's worlds back until it is heard
+const asking = Object.entries(source.beats || {})
+  .find(([id, b]) => id !== 'schedule' && b && typeof b === 'object' && b.choices)
+if (asking) {
+  S.beat = asking[0]; S.expect = 'beat'
+  await say('zzz', Object.keys(asking[1].choices)[0])
+}
 // six days on the books, and a seventh that clears the week's target
 S.week = [700, 700, 700, 700, 700, 700]; S.weekBudgets = S.week.map(() => 1000)
 S.dayStep = 26; S.balance = S.budget + 500; S.investedToday = 1

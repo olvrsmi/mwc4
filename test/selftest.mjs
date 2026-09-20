@@ -47,6 +47,10 @@ function mk (seed = 7, rules = {}, { worlds = specs.worlds, copySource = COPY } 
 }
 async function skipOpening (game, S) {
   await game.start(S)
+  // whatever the opening stops to ask is answered first: a scene waiting on
+  // something typed cannot be skipped past
+  let guard = 0
+  while (story.awaitingAsk(game.copy, S) && guard++ < 10) await game.handle(S, 'Tester')
   if (story.inSequence(S)) await game.handle(S, 'skip')
   return S
 }
@@ -99,11 +103,26 @@ section('the opening')
   ok('a first sitting opens with a scene, not the brochure',
      story.inSequence(S) && S.expect === 'sequence' && !has(r, /premier neo-market/))
   ok('and bursts to the first thing it wants', ['choice', 'ask'].includes(S.seq.awaiting), String(S.seq?.awaiting))
-  ok('offering the writer\'s choices', r.choices.length >= 1, String(r.choices.length))
   ok('art travels as its own emission', r.emissions.some((e) => e.kind === 'art'))
   ok('and every scene emission is paced', r.emissions.every((e) => e.pace))
+
+  // The opening asks the player their name before it offers them anything to
+  // press. An ask has no buttons under it, which is the whole of how a player
+  // knows this one is answered in their own words.
+  const stop = (COPY.sequences[S.seq.id] || [])[S.seq.at] || {}
+  ok('it asks something before it offers anything', Boolean(stop.ask), Object.keys(stop).join())
+  ok('and an ask puts nothing on the buttons', r.choices.length === 0, String(r.choices.length))
+  const blank = await game.handle(S, '  *_`  ')
+  ok('an answer with nothing left in it leaves the question standing',
+     S.seq.awaiting === 'ask' && S.vars[stop.ask] === undefined && has(blank, /still talking/i))
+  await game.handle(S, '  o_j  s  ')
+  ok('what they type becomes their name, sanitised and clamped',
+     S.vars[stop.ask] === 'oj s' && [...S.vars[stop.ask]].length <= (stop.max || 60),
+     JSON.stringify(S.vars[stop.ask]))
+  ok('and the scene plays on to something to press',
+     story.inSequence(S) && game.choices(S).length >= 1)
   const at = S.seq.at
-  const nudged = await game.handle(S, '1')
+  const nudged = await game.handle(S, 'zzz')
   ok('a scene holds the floor', story.inSequence(S) && S.seq.at === at && has(nudged, /still talking/i))
   const last = await walkScene(game, S)
   ok('the opening completes, scenes chaining into one another', !story.inSequence(S) && last !== null)
@@ -119,6 +138,11 @@ section('the opening')
 
   const { game: g2, S: S2 } = mk(92)
   await g2.start(S2)
+  const early = await g2.handle(S2, 'skip')
+  ok('the opening cannot be skipped past the thing it asks',
+     story.inSequence(S2) && S2.seq.awaiting === 'ask' && has(early, /cannot be skipped/i))
+  ok('and skip is not taken as the answer either', S2.vars.initials === undefined, JSON.stringify(S2.vars))
+  await g2.handle(S2, 'Tester')
   const sk = await g2.handle(S2, 'skip')
   ok('skip ends the opening and starts the game', !story.inSequence(S2) && S2.expect === 'world' && heads(sk, /^Day 1$/))
   ok('a skipped opening is not read as the brochure either', !has(sk, /premier neo-market/))
@@ -175,7 +199,7 @@ section('watching')
   const r = await game.handle(S, 'o')
   ok('watching advances one step of the day', S.world.readings.length === 2 && S.dayStep === 1)
   ok('and the qubit recovers while watching', Math.abs(S.coherence - (0.5 + 1 / 9)) < 1e-9, String(S.coherence))
-  ok('no leaving once something has been watched', !r.choices.some((c) => c.token === 'l'))
+  ok('and leaving is still on offer once something has been watched', r.choices.some((c) => c.token === 'l'))
   ok('the panel moves to t1', r.emissions.some((e) => e.kind === 'traces' && e.upto === 1))
   let last
   for (let i = 0; i < 7; i++) last = await game.handle(S, 'o')
@@ -185,6 +209,67 @@ section('watching')
   last = await game.handle(S, 'o')
   ok('watching the whole world ends the round untouched', S.world === null && has(last, /staked nothing/) && S.expect === 'world')
   ok('nine steps have passed', S.dayStep === 9 && game.summary(S).rounds === 1)
+
+  // Walking out of a world that has not moved the way it looked like it would
+  // is a move, not a forfeit: the hours watching it are spent either way, and
+  // nothing is committed until a stake is.
+  const { game: g2, S: T } = mk(140)
+  await skipOpening(g2, T)
+  await g2.handle(T, '1')
+  const offer = T.worlds.map((w) => w.info.id).join()
+  for (let i = 0; i < 3; i++) await g2.handle(T, 'o')
+  const out = await g2.handle(T, 'l')
+  ok('leaving after watching costs nothing beyond the hours already spent',
+     T.world === null && T.expect === 'world' && T.dayStep === 3 && T.balance === 1000 &&
+     has(out, /leave before anything/))
+  ok('and the same three are still on offer', T.worlds.map((w) => w.info.id).join() === offer)
+}
+
+// ---------------------------------------------------------------------------
+section('waiting')
+{
+  const { game, S } = mk(141)
+  await skipOpening(game, S)
+  S.coherence = 0.5
+  const tokens = game.choices(S).map((c) => c.token)
+  ok('the offer carries a wait, before the workshop',
+     tokens.includes('wait') && tokens.indexOf('wait') < tokens.indexOf('m'), tokens.join())
+  const r = await game.handle(S, 'wait')
+  ok('an hour waited recovers what an hour watched would',
+     Math.abs(S.coherence - (0.5 + 1 / 9)) < 1e-9 && S.dayStep === 1, String(S.coherence))
+  ok('and it is the player\'s own hour', r.emissions.some((e) => e.voice === 'player' && /sit it out/.test(e.text || '')))
+  ok('nothing else moves: no world, and no second offer',
+     S.expect === 'world' && S.world === null && r.emissions.every((e) => e.kind !== 'traces') &&
+     !has(r, /Three worlds/))
+
+  await game.handle(S, '1')
+  const readouts = S.world.readings.length
+  S.coherence = 0.5
+  await game.handle(S, 'wait')
+  ok('waiting inside a world spends the hour and not a readout',
+     S.world.readings.length === readouts && S.dayStep === 2 && S.coherence > 0.5)
+
+  for (const t of ['i', '100', '0']) await game.handle(S, t)
+  const held = S.coherence
+  const no = await game.handle(S, 'wait')
+  ok('a position open refuses it - the coupling cannot be sat out',
+     S.expect === 'holding' && S.coherence === held && S.dayStep === 2 &&
+     has(no, /only moves while you hold/))
+
+  const { game: g2, S: T } = mk(142)
+  await skipOpening(g2, T)
+  T.dayStep = 26
+  const bell = await g2.handle(T, 'wait')
+  ok('the day\'s last hour rings the bell however it was spent',
+     heads(bell, /^The Bell$/) && T.dayIndex === 1 && T.dayStep === 0 && T.expect === 'world')
+
+  const { game: g3, S: U } = mk(143)
+  await skipOpening(g3, U)
+  await g3.handle(U, 'm')
+  U.coherence = 0.5
+  await g3.handle(U, 'wait')
+  ok('and it is a command, so it works from the workshop too',
+     U.expect === 'market' && U.dayStep === 1 && U.coherence > 0.5)
 }
 
 // ---------------------------------------------------------------------------
@@ -407,6 +492,28 @@ section('beats')
   ok('a choice with no effect leaves it alone, and clears the beat', (await fx('c', 0.4)).coherence === 0.4 && (await fx('c', 0.4)).beat === null)
   delete game.copy.section('beats')._t
 
+  // A setpiece that asks something opens the day, and the worlds wait behind
+  // it: offered together, its two choices would sit in the same row as the
+  // three worlds with nothing to say which question a keystroke answers.
+  const { game: g5, S: D } = mk(82)
+  await skipOpening(g5, D)
+  D.week = Array.from({ length: choiceDay - 2 }, () => 0)
+  D.weekBudgets = D.week.map(() => 1000)
+  D.dayStep = 26
+  await g5.handle(D, '1')
+  const opened = await g5.handle(D, 'o')
+  ok('a setpiece that asks something holds the day\'s worlds back',
+     D.expect === 'beat' && D.beat === schedule[choiceDay] && !has(opened, /Three worlds/))
+  ok('and nothing but its own choices is on offer',
+     g5.choices(D).length > 0 && g5.choices(D).every((c) => c.kind === 'beat'),
+     g5.choices(D).map((c) => `${c.kind}:${c.token}`).join(' '))
+  const pushed = await g5.handle(D, 'zzz')
+  ok('anything that is not one of its answers is turned away',
+     D.expect === 'beat' && D.beat !== null && has(pushed, /answer them first/i))
+  const heard = await g5.handle(D, Object.keys(COPY.beats[schedule[choiceDay]].choices)[0])
+  ok('and answering it is what opens the market',
+     D.expect === 'world' && D.beat === null && has(heard, /Three worlds/))
+
   const { game: g3, S: B } = mk(80)
   await skipOpening(g3, B)
   B.dayStep = 26
@@ -443,15 +550,43 @@ section('the marketplace')
   const { game, S } = mk(60)
   await skipOpening(game, S)
   const m = await game.handle(S, 'm')
-  ok('the workshop opens from the offer', S.expect === 'market' && heads(m, /^The workshop$/) && has(m, /9 neo-hours/))
+  ok('the workshop opens from the offer',
+     S.expect === 'market' && titles(m).includes(COPY.scenes.marketplace_title) && has(m, /9 neo-hours/))
+
+  S.coherence = 0.2
   await game.handle(S, 'b')
   const r = await game.handle(S, '3')
-  ok('buying upgrades', S.regenUnits === 3 && S.balance === 970 && has(r, /3 bought/))
-  ok('and the rate rises a quarter each', Math.abs(game.regenRate(S) - (1 / 9) * 1.75) < 1e-12)
+  ok('an upgrade is an hour of recovery, handed over on the spot',
+     Math.abs(S.coherence - (0.2 + 3 / 9)) < 1e-9 && S.balance === 970 && has(r, /3 bought/),
+     String(S.coherence))
+  ok('and it buys no better a clock', Math.abs(game.regenRate() - 1 / 9) < 1e-12)
+  ok('it costs money and not time', S.dayStep === 0)
+  ok('and it is counted against the day whose budget bought it', S.upgradesToday === 3)
+
+  // the terminal takes what it has room for and is charged for that alone
+  S.coherence = 0.8
+  await game.handle(S, 'b')
+  const capped = await game.handle(S, '9')
+  ok('more than the terminal has room for is not sold, and not charged for',
+     S.coherence === 1 && S.balance === 950 && S.upgradesToday === 5 &&
+     has(capped, /only had room for 2/), `${S.balance} ${S.coherence}`)
+
+  await game.handle(S, 'b')
+  const clean = await game.handle(S, '1')
+  ok('and a clean terminal is sold nothing at all',
+     S.balance === 950 && S.upgradesToday === 5 && has(clean, /already clean/))
+
+  S.coherence = 0.2
   S.balance = 5
   await game.handle(S, 'b')
   const no = await game.handle(S, '1')
-  ok('what cannot be afforded is refused', has(no, /An upgrade is/) && S.regenUnits === 3)
+  ok('what cannot be afforded is refused', has(no, /An upgrade is/) && S.upgradesToday === 5)
+
+  const shut = game.newSession(61)
+  shut.upgradesToday = 4
+  game.closeDay(shut)
+  ok('the count goes with the day that bought them', shut.upgradesToday === 0)
+
   await game.handle(S, 'l')
   ok('leaving re-offers the worlds', S.expect === 'world' && S.worlds.length === 3)
 }
@@ -488,6 +623,10 @@ section('what the player types into a scene')
   ok('markdown delimiters are stripped', story.capture('a_b*c`d') === 'abcd')
   ok('a name that is nothing but delimiters comes back empty', story.capture('___') === '')
   ok('long answers are capped', story.capture('x'.repeat(200)).length === 60)
+  ok('and a writer may cap them shorter', story.capture('ABCDEFGHIJ', 7) === 'ABCDEFG')
+  ok('newlines and control codes close up into one line', story.capture('a\n\nb\tc') === 'a b c')
+  // invisible, and it reorders every line it is dropped into
+  ok('a bidi override does not survive', !story.capture('ab\u202Ecd').includes('\u202E'))
   // sliced by code point: half a surrogate pair would survive into the save
   // a complete pair ends on a LOW surrogate; a lone HIGH one at the end is the
   // half-character a naive slice(0, 60) would have left behind
@@ -504,6 +643,16 @@ section('what the player types into a scene')
   game.copy.section('sequences')._ask = [{ ask: 'name', text: 'who?' }, { text: 'hello {name}' }]
   const said = story.answerSequence(game.copy, S, ' Ol_ly ')
   ok('the captured answer reaches the next line', said.some((e) => /hello Olly/.test(e.text || '')))
+
+  // the writer's own clamp, on the node beside the ask
+  S.seq = { id: '_ask', at: 0, awaiting: 'ask' }
+  game.copy.section('sequences')._ask = [{ ask: 'name', max: 7, text: 'who?' }, { text: 'hello {name}' }]
+  story.answerSequence(game.copy, S, 'Bartholomew')
+  ok('a node\'s max is what clamps it', S.vars.name === 'Barthol', JSON.stringify(S.vars.name))
+
+  // nothing usable: the question stands rather than being answered with a blank
+  S.seq = { id: '_ask', at: 0, awaiting: 'ask' }
+  ok('an empty answer is not an answer', story.answerSequence(game.copy, S, ' `*_ ') === null && S.seq.at === 0)
   delete game.copy.section('sequences')._ask
 }
 
@@ -519,7 +668,12 @@ section('choices say where they came from')
 
   const { game: g2, S: T } = mk(122)
   await g2.start(T)
-  ok('a scene marks its own', story.inSequence(T) && g2.choices(T).every((c) => c.kind === 'scene'))
+  // the opening asks for a name first, and an ask has no buttons - the
+  // writer's choices are at the node after it
+  let guard = 0
+  while (story.inSequence(T) && !g2.choices(T).length && guard++ < 40) await g2.handle(T, 'Tester')
+  ok('a scene marks its own',
+     story.inSequence(T) && g2.choices(T).length > 0 && g2.choices(T).every((c) => c.kind === 'scene'))
 
   const { game: g3, S: B } = mk(123)
   await skipOpening(g3, B)

@@ -14,7 +14,8 @@
 // player's own qubit read the same way - null until it is in the circuit.
 //
 // TIME IS TURN-BASED. Nothing moves until the player does. One step of a
-// world - t3 to t4, whether watched or held - is one step of the game clock.
+// world - t3 to t4, whether watched or held - is one step of the game clock,
+// and so is an hour the player spends waiting, which moves no world at all.
 // A day is `daySteps` of them (27: three worlds of nine), a week is `weekDays`
 // days, and a position still open when the day's last step lands is closed
 // where it stands. There are no timers anywhere.
@@ -60,7 +61,7 @@ export const DEFAULT_RULES = {
   weekBonus: 100,       // paid into the personal pot, only after probation
   upgradeCost: 10,      // one increment of regeneration, out of the day's budget
   regenSteps: 9,        // steps of watching that restore a spent qubit fully
-  regenUnit: 0.25,      // each upgrade adds this much of the base rate
+  upgradeRegen: 1,      // steps' worth of recovery one purchase brings, at once
   nightSteps: 9,        // steps' worth of recovery the bell brings
   counterfactual: true, // also step the world uncoupled, for the ghost line
   price: DEFAULT_PRICE,
@@ -141,7 +142,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       attempts: 1,
       bonus: 0,                    // personal, cannot be staked
       rounds: 0,
-      regenUnits: 0,
+      upgradesToday: 0,            // purchases made today; the day's budget bought them
       seq: null, seqSeen: [], vars: {},      // scenes
       beatsSeen: [], beat: null, unlocked: [], // beats
       expect: 'boot',
@@ -167,7 +168,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       probation: S.probation,
       attempts: S.attempts,
       rounds: S.rounds,
-      regenUnits: S.regenUnits,
+      upgradesToday: S.upgradesToday,
       world: S.world ? { id: S.world.info.id, name: S.world.name, n: S.world.info.n,
                          readout: k, readouts: S.world.readouts } : null,
       position: S.run ? { holding: C.holding(S.run.target, S.run.holdings), target: S.run.target,
@@ -189,16 +190,23 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   // Time, in steps
   // -------------------------------------------------------------------------
 
-  const regenRate = (S) => (1 / R.regenSteps) * (1 + R.regenUnit * S.regenUnits)
+  /**
+   * How much of the qubit one step brings back.
+   *
+   * Flat, and nothing buys a better one: the workshop sells recovery by the
+   * hour rather than selling a faster clock, so a spent terminal always takes
+   * `regenSteps` hours to come back and the only question is who spends them.
+   */
+  const regenRate = () => 1 / R.regenSteps
 
   /** Restore the player's qubit by so many steps' worth. Returns what came back. */
   function regen (S, steps) {
     const before = S.coherence
-    S.coherence = Math.min(1, S.coherence + regenRate(S) * steps)
+    S.coherence = Math.min(1, S.coherence + regenRate() * steps)
     return S.coherence - before
   }
 
-  const stepsToFull = (S) => (S.coherence >= 0.999 ? 0 : Math.ceil((1 - S.coherence) / regenRate(S)))
+  const stepsToFull = (S) => (S.coherence >= 0.999 ? 0 : Math.ceil((1 - S.coherence) / regenRate()))
   const stepsLeft = (S) => Math.max(0, R.daySteps - S.dayStep)
   const bellDue = (S) => S.dayStep >= R.daySteps
 
@@ -226,6 +234,36 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   function passStep (S, { holding = false } = {}) {
     S.dayStep += 1
     if (!holding) regen(S, 1)
+  }
+
+  /**
+   * One step spent on nothing at all.
+   *
+   * No world is stepped, which is the whole of what separates this from
+   * watching one: a world moves when the player moves it, and sitting back
+   * does not move it. What it buys is the step of recovery watching would have
+   * brought, at the same price in the day - so a spent terminal can be cleaned
+   * up without a world's readouts being burnt through to do it, and a bad
+   * trade is something a desk can sit out rather than only trade through.
+   *
+   * It is the player's own hour and reads as theirs, like the night does.
+   */
+  function waitStep (S) {
+    const before = S.coherence
+    passStep(S)
+    const gained = S.coherence - before
+    const recovering = S.coherence < 0.999
+    const out = [playerText(C.t('scenes.waited', {
+      elapsed: inSteps(1),
+      gained: gained.toFixed(3), gained_raw: gained, recovered: gained > 0.0005,
+      coherence: S.coherence.toFixed(3), coherence_raw: S.coherence,
+      recovering, recovery: recovering ? describeSteps(stepsToFull(S)) : '',
+      steps_left: inSteps(stepsLeft(S)), day_left: describeSteps(stepsLeft(S)),
+    }))]
+    // an hour is an hour: the last one of the day rings the bell, whether it
+    // was spent watching, holding or sitting still
+    if (bellDue(S)) return [...out, ...endOfDay(S), ...endRound(S)]
+    return out
   }
 
   // -------------------------------------------------------------------------
@@ -289,6 +327,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     S.dayIndex += 1
     S.dayStep = 0
     S.investedToday = 0
+    S.upgradesToday = 0          // the day's budget bought them; the day is over
     S.history.push(S.balance)
 
     let verdict = null
@@ -363,7 +402,9 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       }
     }
     // the day is established before anything that happens in it, the day's
-    // own setpiece included
+    // own setpiece included. The worlds come after both, from the endRound
+    // that follows every bell - and a setpiece that asks something holds them
+    // back until it has its answer. See offerOrHold.
     out.push(...sceneMain(S))
     out.push(...story.fireBeat(C, S, beatCtx(S)))
     return out
@@ -423,7 +464,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       day_left: describeSteps(stepsLeft(S)),
       steps_left: inSteps(stepsLeft(S)),
       pl: signedMoney(pl), pl_raw: pl,
-      upgrades: S.regenUnits,
+      upgrades: S.upgradesToday,
     }
   }
 
@@ -567,7 +608,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       balance: money(S.balance), balance_raw: S.balance,
       budget: money(S.budget), budget_raw: S.budget,
       bonus: money(S.bonus), bonus_raw: S.bonus,
-      units: S.regenUnits, upgrades: S.regenUnits,
+      units: S.upgradesToday, upgrades: S.upgradesToday,
       recovering,
       recovery: recovering ? describeSteps(stepsToFull(S)) : '',
     })]
@@ -729,13 +770,30 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     return out
   }
 
-  /** Out of the world; the next round is offered unless a scene has the floor. */
+  /**
+   * The day's worlds, offered - unless somebody is still talking.
+   *
+   * A setpiece fires as a day opens and the worlds would go out in the same
+   * breath, so a setpiece that asks something puts its two choices in the same
+   * row as the three worlds and nothing on screen says which question a
+   * keystroke is answering. It holds the offer instead: `beat` is the state of
+   * waiting on one, and answering it is what opens the market.
+   *
+   * A setpiece with nothing to answer holds nothing. It is a line, it has been
+   * said, and the day carries on under it.
+   */
+  function offerOrHold (S) {
+    if (story.inSequence(S)) return []
+    if (S.beat) { S.expect = 'beat'; return [] }
+    return offerWorlds(S)
+  }
+
+  /** Out of the world; the next round is offered unless something has the floor. */
   function endRound (S) {
     S.rounds += 1
     S.world = null
     S.pending = null
-    if (story.inSequence(S)) return []
-    return offerWorlds(S)
+    return offerOrHold(S)
   }
 
   // -------------------------------------------------------------------------
@@ -762,6 +820,10 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     // the stake leaves the balance only when the position opens - so it picks
     // up at the invest prompt, with the world and its readings as they were.
     if (RETIRED_EXIT.has(S.expect)) { S.pending = null; S.expect = 'invest' }
+    // A game saved when an upgrade bought a permanently faster clean-up rather
+    // than an hour of recovery outright. There is no such thing to carry over:
+    // the rate is the rate, and what is counted now is the day's purchases.
+    if (S.upgradesToday === undefined) { S.upgradesToday = 0; delete S.regenUnits }
     return S
   }
 
@@ -795,7 +857,9 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
         worlds: S.allWorlds.length, skipped: 0, recharge: describeSteps(R.regenSteps),
       }))
     }
-    out.push(...sceneMain(S), ...offerWorlds(S), ...story.fireBeat(C, S, beatCtx(S)))
+    // the day, then whatever the day opens on, and only then the worlds - a
+    // setpiece that asks something is answered before the market is
+    out.push(...sceneMain(S), ...story.fireBeat(C, S, beatCtx(S)), ...offerOrHold(S))
     return result(S, out)
   }
 
@@ -809,6 +873,11 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     // not recognise gets a nudge rather than reaching the game.
     if (story.inSequence(S)) {
       if (cmd === 'skip' || cmd === '/skip') {
+        // A scene stopped on an `ask` cannot be skipped past. The answer is
+        // the player's own and the game carries it from there, so there is
+        // nothing to skip it with - and the word itself must not land in the
+        // variable, which is why this is caught here rather than below.
+        if (story.awaitingAsk(C, S)) return result(S, [text(C.t('prompts.ask_first'))])
         story.endSequence(S)
         S.seqSeen = [...new Set([...(S.seqSeen || []), ...C.list('opening')])]
         return start(S)
@@ -830,7 +899,12 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     // does not touch `expect` - so it can be answered mid-position, and a
     // command that is not one of its choices falls through untouched.
     const answered = story.answerBeat(C, S, cmd)
-    if (answered) return result(S, answered)
+    if (answered) {
+      // one fired as the day opened is holding the day's worlds back; hearing
+      // it out is what offers them
+      if (S.expect === 'beat') return result(S, [...answered, ...offerWorlds(S)])
+      return result(S, answered)
+    }
 
     if (!cmd) return result(S, [text(C.t('prompts.say_something'))])
     if (['help', '?', '/help'].includes(cmd)) {
@@ -838,28 +912,43 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
                         text(C.t('prompts.help'), C.t('prompts.help_title'))])
     }
     if (['state', 'status', '/status', '/state'].includes(cmd)) return result(S, sceneStatus(S))
+    // An hour spent on nothing, from wherever the player is standing. It is the
+    // only way the clock moves without a world moving with it, and the only way
+    // a spent terminal cleans up that does not cost a world's readouts.
+    if (['wait', '/wait'].includes(cmd)) {
+      // Not with a position open. The coupling is what spends the terminal and
+      // it runs for exactly as long as the position does, so an hour of it
+      // cannot be sat out - and one that regenerated would undo the trade's
+      // whole cost for the price of a keystroke.
+      if (S.expect === 'holding') return result(S, [text(C.t('scenes.cannot_wait'))])
+      return result(S, waitStep(S))
+    }
 
     switch (S.expect) {
       case 'world': {
         if (cmd === 'm') return result(S, sceneMarket(S))
         const i = num(cmd)
         if (!S.worlds || !Number.isInteger(i) || i < 1 || i > S.worlds.length) {
-          return result(S, [text(C.t('prompts.unknown', { options: '**1**, **2** or **3**, or **m**' }))])
+          return result(S, [text(C.t('prompts.unknown', {
+            options: '**1**, **2** or **3** · **wait** · **m**',
+          }))])
         }
         return result(S, await enterWorld(S, i))
       }
 
       case 'invest': {
-        const k = S.world.readings.length - 1
-        // leaving is free only before anything has been watched
-        if (cmd === 'l' && k === 0) {
+        // Leaving is free wherever it is done. The hours already spent
+        // watching are spent either way, and nothing is committed until a
+        // stake is - so walking out of a world that has not moved the way it
+        // looked like it would is a move, not a forfeit.
+        if (cmd === 'l') {
           S.world = null
           return result(S, [text(C.t('scenes.left')), ...offerWorlds(S)])
         }
         if (cmd === 'o' || cmd === 'w') return result(S, await observe(S))
         if (cmd !== 'i') {
           return result(S, [text(C.t('prompts.unknown', {
-            options: '**i** to invest · **o** to observe' + (k === 0 ? ' · **l** to leave' : ''),
+            options: '**i** to invest · **o** to observe · **l** to leave',
           }))])
         }
         if (S.balance < 1) return result(S, [text(C.t('scenes.nothing_to_stake'))])
@@ -894,6 +983,13 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
         return result(S, [text(C.t('prompts.unknown', { options: '**h** to hold · **c** to close' }))])
       }
 
+      case 'beat':
+        // the setpiece has the floor until it is answered; `wait`, `help` and
+        // `status` have already been past, and they are the whole of what else
+        // there is to do
+        if (!S.beat) return result(S, offerWorlds(S))     // saved mid-wait, the beat since gone
+        return result(S, [text(C.t('prompts.beat_waiting'))])
+
       case 'market': {
         if (cmd === 'l') return result(S, offerWorlds(S))
         if (cmd === 'b') { S.expect = 'buy'; return result(S, [text(C.t('scenes.ask_units'))]) }
@@ -904,16 +1000,32 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
         const k = num(cmd)
         if (k === null || k < 1) return result(S, sceneMarket(S))
         const want = Math.floor(k)
-        const afford = Math.min(want, Math.floor(S.balance / R.upgradeCost))
+        // Three things limit a purchase and the smallest of them wins: what
+        // was asked for, what the day's balance covers, and what the terminal
+        // still has room to take. The shop will take money for very little,
+        // but not for nothing at all - an hour sold onto a full meter is an
+        // hour that goes nowhere, and it is not charged for.
+        const room = Math.ceil(stepsToFull(S) / R.upgradeRegen)
+        if (room < 1) return result(S, [text(C.t('scenes.already_clean')), ...sceneMarket(S)])
+        const afford = Math.floor(S.balance / R.upgradeCost)
         if (afford < 1) {
           return result(S, [text(C.t('scenes.cannot_afford',
             { cost: money(R.upgradeCost), balance: money(S.balance) })), ...sceneMarket(S)])
         }
-        S.balance -= afford * R.upgradeCost
-        S.regenUnits += afford
+        const bought = Math.min(want, afford, room)
+        const spent = bought * R.upgradeCost
+        S.balance -= spent
+        S.upgradesToday += bought
+        // the whole of what an upgrade is: the hour, handed over on the spot
+        const gained = regen(S, bought * R.upgradeRegen)
+        const recovering = S.coherence < 0.999
         return result(S, [text(C.t('scenes.upgraded', {
-          bought: afford, spent: money(afford * R.upgradeCost),
-          upgrades: S.regenUnits, recovery: describeSteps(Math.ceil(1 / regenRate(S))),
+          bought, wanted: want, capped: bought < want,
+          spent: money(spent), spent_raw: spent,
+          upgrades: S.upgradesToday,
+          gained: gained.toFixed(3), gained_raw: gained,
+          coherence: S.coherence.toFixed(3), coherence_raw: S.coherence,
+          recovering, recovery: recovering ? describeSteps(stepsToFull(S)) : '',
         })), ...sceneMarket(S)])
       }
 
@@ -946,12 +1058,13 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       case 'world':
         ;(S.worlds || []).forEach((w, i) =>
           push(`${i + 1}`, C.t('buttons.world', { index: i + 1, world: w.name, opportunities: w.info.n })))
+        push('wait', C.t('buttons.wait'))
         push('m', C.t('buttons.marketplace'))
         break
       case 'invest':
         push('i', C.t('buttons.invest'))
         push('o', C.t('buttons.observe'))
-        if (S.world && S.world.readings.length - 1 === 0) push('l', C.t('buttons.leave'))
+        push('l', C.t('buttons.leave'))
         break
       case 'stake': {
         const m = Math.floor(S.balance)
@@ -977,6 +1090,10 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
         break
       case 'buy':
         for (const v of ['1', '2', '5', '10']) push(v, v)
+        break
+      case 'beat':
+        // nothing of the game's own: the setpiece's choices, collected above,
+        // are the whole of what may be answered
         break
       default:
         break
