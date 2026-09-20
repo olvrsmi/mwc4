@@ -20,7 +20,7 @@
 // Keep captions and labels to ASCII: the bundled font has no mathematical
 // angle brackets or box-drawing glyphs, and renders them as tofu.
 
-import { createCanvas, GlobalFonts } from '@napi-rs/canvas'
+import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -61,11 +61,22 @@ for (const file of ['RobotoCondensed[wght].ttf', 'RobotoMono-ExtraLight.ttf',
 // drawn at SCALE device pixels to the point, because the chart is mostly read
 // on a phone and a hairline ladder at 1x is a hairline nobody can see.
 const SCALE = 2
+// The masthead, decoded once at import. It has to be loaded the async way -
+// `new Image()` with a Buffer reports itself complete here and then draws
+// nothing - so this module is asynchronous to evaluate, which every static
+// importer already handles. A missing file costs the logo, not the chart.
+const LOGO = await loadImage(join(ART, 'foomberg_logo.png')).catch(() => {
+  console.warn('  render: no foomberg_logo.png; the footer will go without it')
+  return null
+})
+
 const W = 1024
 const BAR = 32                       // the title bar, rule included
 const RULE = 2                       // and the rule that closes it
 const PLOT = 512
-const H = BAR + PLOT
+const FOOT = 32                      // the footer, its rule included
+const H = BAR + PLOT + FOOT
+const FLOOR = BAR + PLOT             // where the chart stops and the footer starts
 const CELL = 64                      // the grid square, and one readout of width
 const GUTTER = CELL                  // the price ladder at either edge
 const X0 = GUTTER                    // the chart itself, between the fences
@@ -80,10 +91,13 @@ const TRACE = 3                      // a quote's line
 const CAP = 12                       // cap height of 17px Roboto Mono
 const TIP = 11                       // the callout's point
 const CALLOUT_H = 24
+const FOOT_CAP = 10                  // cap height of 13px Roboto Mono
+const LOGO_H = 10                    // the masthead, however wide that makes it
 
 const BG = '#000000'
 const INK = '#FFFFFF'
 const GRID = 'rgba(255,255,255,.3)'  // a hairline drawn off-pixel: two rows of near-nothing
+const FOOT_INK = '#888888'           // the footer speaks quietly; it is not part of the market
 const COMPANY = ['#1FB448', '#FF0EAD', '#A0902C', '#679BBD',
                  '#8A77E3', '#7F7F7F', '#BD2235']
 const colour = (q) => COMPANY[q % COMPANY.length]
@@ -93,11 +107,18 @@ const MONO = '"Roboto Mono"'
 const LIGHT = `200 17px ${MONO}`     // every number on the sheet
 const PLAIN = `17px ${MONO}`         // the title bar
 const BOLD = `bold 17px ${MONO}`     // a holding's name
+const SMALL = `13px ${MONO}`         // the footer
 
 // Text is centred on a value, not sat on it: a name belongs beside its dot and
 // a number beside its gridline, so the baseline is half a cap height below.
 const baseline = (y) => Math.round(y + CAP / 2 + 0.5)
-const TITLE_BASE = baseline((BAR - RULE) / 2)
+// A bar centres the caps it carries in the space it has left under its rule.
+const centred = (mid, cap) => Math.round(mid + cap / 2)
+const TITLE_BASE = centred((BAR - RULE) / 2, CAP)
+const FOOT_MID = RULE + (FOOT - RULE) / 2   // within the footer, not the sheet
+// 13px caps measure nearer 9 than 10, so centring the ink they actually make
+// puts the baseline half a pixel above where whole-pixel arithmetic lands it.
+const FOOT_BASE = centred(FOOT_MID, FOOT_CAP) - 0.5
 const crisp = (v) => Math.round(v) + 0.5
 
 const pct = (m) => `${m >= 0 ? '+' : ''}${(m * 100).toFixed(1)}%`
@@ -229,13 +250,13 @@ export function renderTraces ({ n, f, priced, clean, upto, totalReadouts, target
   ctx.strokeStyle = GRID
   ctx.beginPath()
   for (let r = 0; r <= ROWS; r++) { ctx.moveTo(X0, BAR + r * CELL); ctx.lineTo(X1, BAR + r * CELL) }
-  for (let c = 1; c < COLS; c++) { ctx.moveTo(X0 + c * CELL, BAR); ctx.lineTo(X0 + c * CELL, H) }
+  for (let c = 1; c < COLS; c++) { ctx.moveTo(X0 + c * CELL, BAR); ctx.lineTo(X0 + c * CELL, FLOOR) }
   ctx.stroke()
 
   ctx.strokeStyle = INK
   ctx.beginPath()
-  ctx.moveTo(crisp(X0), BAR); ctx.lineTo(crisp(X0), H)
-  ctx.moveTo(crisp(X1), BAR); ctx.lineTo(crisp(X1), H)
+  ctx.moveTo(crisp(X0), BAR); ctx.lineTo(crisp(X0), FLOOR)
+  ctx.moveTo(crisp(X1), BAR); ctx.lineTo(crisp(X1), FLOOR)
   ctx.stroke()
 
   // ---- the chart, kept off the title bar -----------------------------------
@@ -251,7 +272,7 @@ export function renderTraces ({ n, f, priced, clean, upto, totalReadouts, target
     ctx.setLineDash([4, 4])
     ctx.beginPath()
     ctx.moveTo(crisp(x(interventionAt)), BAR)
-    ctx.lineTo(crisp(x(interventionAt)), H)
+    ctx.lineTo(crisp(x(interventionAt)), FLOOR)
     ctx.stroke()
     ctx.setLineDash([])
   }
@@ -309,7 +330,7 @@ export function renderTraces ({ n, f, priced, clean, upto, totalReadouts, target
     .filter((q) => Number.isFinite(series[0]?.[q]))
     .map((q) => ({ q, at: y(series[0][q]) }))
     .sort((a, b) => a.at - b.at)
-  spread(names, CAP + 3, BAR + CAP, H - CAP)
+  spread(names, CAP + 3, BAR + CAP, FLOOR - CAP)
   ctx.font = BOLD
   ctx.textAlign = 'right'
   ctx.lineJoin = 'round'
@@ -340,6 +361,18 @@ export function renderTraces ({ n, f, priced, clean, upto, totalReadouts, target
   ctx.fillText(position(series, { target, interventionAt, at, name, quoted: Boolean(priced) }),
                W - INSET, TITLE_BASE)
 
+  // ---- the footer, which owes the market nothing and never changes -------
+  ctx.fillStyle = INK
+  ctx.fillRect(0, FLOOR, W, RULE)
+  ctx.font = SMALL
+  ctx.fillStyle = FOOT_INK
+  ctx.textAlign = 'left'
+  ctx.fillText('FREE TRIAL', INSET, FLOOR + FOOT_BASE)
+  if (LOGO) {
+    const w = LOGO.width * (LOGO_H / LOGO.height)
+    ctx.drawImage(LOGO, W - INSET - w, FLOOR + FOOT_MID - LOGO_H / 2, w, LOGO_H)
+  }
+
   return canvas.toBuffer('image/png')
 }
 
@@ -352,7 +385,7 @@ function callout (ctx, px, py, text) {
   const w = Math.round(ctx.measureText(text).width) + 8
   const flip = px + TIP + w > W - 4
   const bx = flip ? px - TIP - w : px + TIP
-  const by = Math.min(Math.max(py - CALLOUT_H / 2, BAR + 2), H - CALLOUT_H - 2)
+  const by = Math.min(Math.max(py - CALLOUT_H / 2, BAR + 2), FLOOR - CALLOUT_H - 2)
   ctx.beginPath()
   ctx.moveTo(px, py)
   ctx.lineTo(crisp(bx), crisp(by))
