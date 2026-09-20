@@ -299,6 +299,25 @@ prompts:
   # It holds the day's worlds back until it has one, and unlike a scene there
   # is no skipping it — so this does not offer that.
   beat_waiting: _Answer them first._
+
+  # ---------------------------------------------------------------------
+  # Said the moment a move is taken, BEFORE the work behind it starts.
+  #
+  # Three moves reach the physics backend and nothing else does: entering a
+  # market, watching an hour pass in one, and holding a position through one.
+  # Over the network that is a wait with nothing on screen, and a chat client
+  # leaves the last keyboard sitting there looking live - so a slow turn reads
+  # as a broken one. These are what says otherwise.
+  #
+  # They are the player's own, so they take the player's side of the screen.
+  # They are not kept: the transcript already records the move that was made,
+  # and read back later there is no wait for them to be covering.
+  #
+  # Empty one and nothing is sent for that move.
+  # ---------------------------------------------------------------------
+  entering: "opening new market, this could take a while..."
+  observing: "observing..."
+  holding: "holding..."
   nothing_to_decide: Nothing to decide just now.
   # A chat client leaves every keyboard it has ever sent tappable, and the
   # same token means different things in different moments - so a tap on an

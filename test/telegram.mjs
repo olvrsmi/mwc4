@@ -254,6 +254,12 @@ section('a conversation')
   ok('a tap is a turn', h.sent.length > 0)
   ok('the callback is answered before the work', h.sent[0].method === 'answerCallbackQuery')
   ok('entering a world sends the chart as a photo', h.sent.some((s) => s.method === 'sendPhoto'))
+  // the slow ones say so before they start: over the network the backend is a
+  // wait, and a live keyboard above a game that has stopped reads as broken
+  ok('and says it is opening the market before it goes and does it',
+     texts(h.sent)[0] === COPY.prompts.entering, JSON.stringify(texts(h.sent)[0]))
+  ok('the waiting line carries no keyboard and does not ring',
+     kbOf(msgs(h.sent)[0]) === undefined && msgs(h.sent)[0].payload.disable_notification === true)
   const photo = h.sent.find((s) => s.method === 'sendPhoto')
   ok('the chart travels on its own, with no caption under it', photo.payload.caption === undefined)
   ok('the report came first, as text', texts(h.sent).some((t) => /monopolisation/.test(t)))
@@ -266,6 +272,7 @@ section('a conversation')
 
   h.sent.length = 0
   await say(h.bot, 'h')
+  ok('holding says so first too', texts(h.sent)[0] === COPY.prompts.holding)
   ok('holding a step reports on a chart', h.sent.some((s) => s.method === 'sendPhoto'))
   h.sent.length = 0
   await say(h.bot, 'c')

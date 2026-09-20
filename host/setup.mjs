@@ -244,6 +244,17 @@ export function createSessions (host, {
       // before the turn moves: see saidBy. A game still in its opening has
       // been asked nothing yet, so there is nothing for this to be an answer to
       const said = S.expect === 'boot' ? null : saidBy(text, game.choices(S))
+      // A move that reaches the physics backend is a wait, and over the
+      // network a long one. Say it was taken before starting it, so the player
+      // is not left looking at a live keyboard and a game that appears to have
+      // stopped. Delivered and then let go of: it is not part of the turn and
+      // does not go in the log, because the transcript already records the
+      // move and read back later there is no wait for it to cover.
+      const ahead = game.waiting(S, text)
+      if (ahead) {
+        await deliver(id, [ahead], S, { choices: [], silent: true })
+          .catch((e) => console.error(`  ${id}: could not say the wait: ${e?.message || e}`))
+      }
       let r
       try {
         r = await game.handle(S, text)

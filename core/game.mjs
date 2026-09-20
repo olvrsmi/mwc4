@@ -891,6 +891,43 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     return result(S, out)
   }
 
+  /**
+   * What to say while a token is being worked on, or null.
+   *
+   * Three moves reach the physics backend - entering a market, watching an
+   * hour pass in one, holding a position through one - and over the network
+   * that is a second or more with nothing on screen. A chat client leaves the
+   * last keyboard live and tappable the whole time, so a slow turn is
+   * indistinguishable from a broken one. A caller says this first, then takes
+   * the turn.
+   *
+   * It runs BEFORE the turn and must not touch the session: the turn is what
+   * moves the game. It answers for the state as it stands, so it asks the same
+   * questions of the token the dispatch below is about to ask of it - a token
+   * a scene, a setpiece or a nudge would swallow reaches no backend and gets
+   * nothing said about it.
+   */
+  function waiting (S, raw) {
+    const cmd = String(raw ?? '').trim().toLowerCase()
+    if (!cmd || story.inSequence(S)) return null
+    // a pending setpiece answers first, and answering one moves no world
+    if (story.beatChoices(C, S).some((c) => String(c.token).toLowerCase() === cmd)) return null
+    const line = (body) => (body && body.trim() ? playerText(body) : null)
+    switch (S.expect) {
+      case 'world': {
+        const i = num(cmd)
+        if (!S.worlds || !Number.isInteger(i) || i < 1 || i > S.worlds.length) return null
+        return line(C.t('prompts.entering'))
+      }
+      case 'invest':
+        return cmd === 'o' || cmd === 'w' ? line(C.t('prompts.observing')) : null
+      case 'holding':
+        return cmd === 'h' || cmd === 'hold' ? line(C.t('prompts.holding')) : null
+      default:
+        return null
+    }
+  }
+
   /** Handle one token. */
   async function handle (S, raw) {
     await hydrate(S)
@@ -1131,7 +1168,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
 
   return {
     rules: R,
-    newSession, start, handle, choices, summary, hydrate,
+    newSession, start, handle, waiting, choices, summary, hydrate,
     setCopy (c) { C = c },
     get copy () { return C },
     // the pieces, for tests and other hosts

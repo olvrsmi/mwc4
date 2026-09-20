@@ -612,6 +612,45 @@ section('the marketplace')
 }
 
 // ---------------------------------------------------------------------------
+section('saying a slow move was taken')
+{
+  const { game, S } = mk(77)
+  await skipOpening(game, S)
+  const said = (t) => game.waiting(S, t)
+  ok('entering a market says so - it is the one move that opens a circuit',
+     said('1')?.text === COPY.prompts.entering && said('1').voice === 'player')
+  ok('and nothing is said for a move that touches no backend',
+     said('m') === null && said('wait') === null && said('help') === null &&
+     said('4') === null && said('') === null)
+
+  await game.handle(S, '1')
+  ok('watching an hour says so', said('o')?.text === COPY.prompts.observing)
+  ok('but investing does not - the stake is placed here, not out there',
+     said('i') === null && said('l') === null)
+
+  for (const t of ['i', '100', '0']) await game.handle(S, t)
+  ok('holding says so', said('h')?.text === COPY.prompts.holding && said('hold') !== null)
+  ok('closing does not - it settles from readings already in hand', said('c') === null)
+
+  // it runs before the turn, so the turn is what has to move the game
+  const before = JSON.stringify({ ...S, allWorlds: null })
+  for (const t of ['h', 'c', 'o', '1', 'wait', 'nonsense']) game.waiting(S, t)
+  ok('it leaves the session exactly where it found it',
+     JSON.stringify({ ...S, allWorlds: null }) === before)
+
+  // a scene or a setpiece answers first, and answering one reaches no backend
+  const { game: g2, S: T } = mk(78)
+  await g2.start(T)
+  ok('a running scene says nothing', story.inSequence(T) && g2.waiting(T, 'a') === null)
+
+  const { game: g3, S: B } = mk(79)
+  await skipOpening(g3, B)
+  B.beat = { id: 'change2', kind: 'setpiece' }
+  ok("a setpiece's own token is left to the setpiece", g3.waiting(B, 'a') === null)
+  ok('and a token it does not claim still says its piece', g3.waiting(B, '1') !== null)
+}
+
+// ---------------------------------------------------------------------------
 section('help and status')
 {
   const { game, S } = mk(62)
