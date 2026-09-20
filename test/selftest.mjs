@@ -78,6 +78,16 @@ const esc = (t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
  * are actually about is that the right scene played, so that is what they ask.
  */
 const sceneOn = (S) => S.seq?.id ?? (S.seqSeen || []).at(-1)
+/**
+ * Did the turn say THIS LINE OF COPY - whatever its values came out as?
+ *
+ * The same problem as `sceneOn`, for a message with no scene behind it: a test
+ * that quotes a phrase goes red the next time the phrase is edited, and a copy
+ * change should not read as a broken game. This takes the line from copy.yaml,
+ * so the assertion follows the writer, and leaves the placeholders open.
+ */
+const saysLike = (r, tpl) => has(r, new RegExp(
+  esc(String(tpl ?? '').trim().split('\n')[0].trim()).replace(/\\\{\w+\\\}/g, '.+?')))
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47])
 
 // ---------------------------------------------------------------------------
@@ -612,13 +622,14 @@ section('the marketplace')
   await game.handle(S, 'b')
   const clean = await game.handle(S, '1')
   ok('and a clean terminal is sold nothing at all',
-     S.balance === 950 && S.upgradesToday === 5 && has(clean, /already clean/))
+     S.balance === 950 && S.upgradesToday === 5 && saysLike(clean, COPY.scenes.already_clean))
 
   S.coherence = 0.2
   S.balance = 5
   await game.handle(S, 'b')
   const no = await game.handle(S, '1')
-  ok('what cannot be afforded is refused', has(no, /An upgrade is/) && S.upgradesToday === 5)
+  ok('what cannot be afforded is refused',
+     saysLike(no, COPY.scenes.cannot_afford) && S.upgradesToday === 5)
 
   const shut = game.newSession(61)
   shut.upgradesToday = 4
@@ -686,7 +697,7 @@ section('help and status')
   const junk = await game.handle(S, 'xyz')
   ok('junk mid-position is nudged', has(junk, /\*\*h\*\* to hold/) && S.run !== null)
   const empty = await game.handle(S, '   ')
-  ok('nothing at all is answered', has(empty, /Say something/))
+  ok('nothing at all is answered', saysLike(empty, COPY.prompts.say_something))
   ok('describing steps, in the writer\'s word for them',
      game.describeSteps(1) === '1 neo-hour' && game.describeSteps(9) === '9 neo-hours' &&
      game.describeSteps(27) === '1 day' && game.describeSteps(54) === '2 days' && game.describeSteps(40) === '1.5 days')
