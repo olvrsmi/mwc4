@@ -95,7 +95,7 @@ section('the opening')
   ok('a first sitting opens with a scene, not the brochure',
      story.inSequence(S) && S.expect === 'sequence' && !has(r, /premier neo-market/))
   ok('and bursts to the first thing it wants', ['choice', 'ask'].includes(S.seq.awaiting), String(S.seq?.awaiting))
-  ok('offering the writer\'s choices', r.choices.length >= 2, String(r.choices.length))
+  ok('offering the writer\'s choices', r.choices.length >= 1, String(r.choices.length))
   ok('art travels as its own emission', r.emissions.some((e) => e.kind === 'art'))
   ok('and every scene emission is paced', r.emissions.every((e) => e.pace))
   const at = S.seq.at

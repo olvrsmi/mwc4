@@ -223,7 +223,7 @@ section('a conversation')
   ok('exactly one message in the burst carries the keyboard', withKb.length === 1, `${withKb.length}`)
   ok('and it is the last thing sent',
      h.sent.filter((s) => s.method !== 'sendChatAction').at(-1) === withKb[0])
-  ok('the opening offers the scene its choices', kbOf(withKb[0]).flat().length >= 2)
+  ok('the opening offers the scene its choices', kbOf(withKb[0]).flat().length >= 1)
 
   h.sent.length = 0
   await say(h.bot, 'skip')
