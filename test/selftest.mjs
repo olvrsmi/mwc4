@@ -69,6 +69,15 @@ const has = (r, re) => texts(r).some((t) => re.test(t))
 // it, so what heads a message is asked for separately from what it says.
 const titles = (r) => r.emissions.filter((e) => e.kind === 'text').map((e) => e.title || '')
 const heads = (r, re) => titles(r).some((t) => re.test(t))
+const esc = (t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+/**
+ * Which scene took the floor, whether it is still running or already over.
+ *
+ * A test that pins a PHRASE from a scene goes red the next time that phrase is
+ * edited, which makes a copy change look like a broken game. What these tests
+ * are actually about is that the right scene played, so that is what they ask.
+ */
+const sceneOn = (S) => S.seq?.id ?? (S.seqSeen || []).at(-1)
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47])
 
 // ---------------------------------------------------------------------------
@@ -457,7 +466,8 @@ section('probation')
   T.balance = T.budget + 500; T.investedToday = 1; T.dayStep = 26
   await g.handle(T, '1')
   const r = await g.handle(T, 'o')
-  ok('the verdict plays as a scene', heads(r, /^Seven days\./) && has(r, /off probation/))
+  ok('the verdict plays as a scene',
+     heads(r, /^Seven days\./) && sceneOn(T) === 'probation_passed', sceneOn(T))
   ok('and the desk is off probation with the next week offered', !T.probation && (T.expect === 'world' || story.inSequence(T)))
 
   const { game: g2, S: F } = mk(6)
@@ -466,9 +476,16 @@ section('probation')
   F.balance = F.budget - 100; F.investedToday = 1; F.dayStep = 26
   await g2.handle(F, '1')
   const r2 = await g2.handle(F, 'o')
-  await walkScene(g2, F)
-  ok('a failed week says so and starts attempt two', has(r2, /Not a profitable week/) && F.attempts === 2 && F.budget === 1000 && F.weekBudgets.length === 0)
-  ok('a repeat attempt hears the floor carry on', has(r2, new RegExp(COPY.beats.again.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'))))
+  const verdict = sceneOn(F)
+  // The floor's own line comes after the scene, not inside it - so the walk
+  // carries it, unless the scene had nothing to stop for and ended inside the
+  // turn that rang the bell, which is where it is then.
+  const after = (await walkScene(g2, F)) || r2
+  ok('a failed week plays the failure and starts attempt two',
+     heads(r2, /^Seven days\./) && verdict === 'probation_failed' &&
+     F.attempts === 2 && F.budget === 1000 && F.weekBudgets.length === 0, verdict)
+  ok('a repeat attempt hears the floor carry on',
+     has(after, new RegExp(COPY.beats.again.map(esc).join('|'))))
 }
 
 // ---------------------------------------------------------------------------
