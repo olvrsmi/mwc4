@@ -105,8 +105,15 @@ const FOOT_INK = '#888888'           // the footer speaks quietly; it is not par
 // One hue per holding, taken in order and wrapped if a world somehow lists more
 // than there are. A caller can hand over a different set - `test/palette.mjs`
 // does, to audition one - but the market always draws with this.
-const COMPANY = ['#1FB448', '#FF0EAD', '#A0902C', '#679BBD',
-                 '#8A77E3', '#7F7F7F', '#BD2235']
+const COMPANY = [
+'#00FF00',
+'#FF00FF',
+'#FFFF00',
+'#0000FF',
+'#00FFFF',
+'#FF0000',
+'#AAAAAA'
+]
 export const PALETTE = { bg: BG, ink: INK, grid: GRID, companies: COMPANY }
 
 const MONO = '"Roboto Mono"'
