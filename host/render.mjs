@@ -102,9 +102,11 @@ const BG = '#000000'
 const INK = '#FFFFFF'
 const GRID = 'rgba(255,255,255,.3)'  // a hairline drawn off-pixel: two rows of near-nothing
 const FOOT_INK = '#888888'           // the footer speaks quietly; it is not part of the market
+// One hue per holding, taken in order and wrapped if a world somehow lists more
+// than there are. A caller can hand over a different set - `test/palette.mjs`
+// does, to audition one - but the market always draws with this.
 const COMPANY = ['#1FB448', '#FF0EAD', '#A0902C', '#679BBD',
                  '#8A77E3', '#7F7F7F', '#BD2235']
-const colour = (q) => COMPANY[q % COMPANY.length]
 export const PALETTE = { bg: BG, ink: INK, grid: GRID, companies: COMPANY }
 
 const MONO = '"Roboto Mono"'
@@ -229,8 +231,9 @@ function rung (v, step) {
  */
 export function renderTraces ({ n, f, priced, clean, upto, from = 0, totalReadouts, target = null,
                                 interventionAt = null, holdings, world, title,
-                                market = 'NEO-MARKET', domain = null }) {
+                                market = 'NEO-MARKET', domain = null, colours = COMPANY }) {
   const series = priced || f
+  const colour = (q) => colours[q % colours.length]
   const at = Math.min(upto ?? series.length - 1, series.length - 1)
   const name = (q) => holdings?.[q] ?? `E${q}`
   const canvas = createCanvas(W * SCALE, H * SCALE)
