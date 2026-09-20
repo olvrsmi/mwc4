@@ -218,12 +218,12 @@ export function createBot ({
   }
 
   /** A message, split if it will not fit, with the keyboard on the last part. */
-  async function sendText (chatId, source, reply_markup) {
+  async function sendText (chatId, source, reply_markup, quietly = {}) {
     const parts = splitText(source)
     for (let p = 0; p < parts.length; p++) {
       const last = p === parts.length - 1
       await sendWithRetry(() => bot.api.sendMessage(chatId, toHtml(parts[p]), {
-        parse_mode: 'HTML', ...(last && reply_markup ? { reply_markup } : {}),
+        parse_mode: 'HTML', ...quietly, ...(last && reply_markup ? { reply_markup } : {}),
       }), chatId)
     }
   }
@@ -252,13 +252,18 @@ export function createBot ({
    * keyboard halfway up offers a decision the player has not been told about
    * yet, and leaves a dead one above the live one.
    *
-   * `choices` is read from S, and is a parameter only for the mirror: that
-   * delivers a browser turn some time after the turn happened, by which point
-   * S has moved on, and the keyboard has to be the one the turn being shown
-   * ended with rather than whatever the session says now.
+   * The options are the mirror's, and nothing else passes them. `choices` is
+   * otherwise read from S: a mirrored burst is delivered some time after the
+   * turn happened, by which point S has moved on, and the keyboard has to be
+   * the one the turn being shown ended with rather than whatever the session
+   * says now. `silent` is for the same reason - the player is looking at this
+   * turn in the browser already, and a buzz in their pocket telling them about
+   * something on the screen in front of them is a notification they did not
+   * ask for. It still arrives in the chat, just without the sound.
    */
-  async function deliver (id, emissions, S, choices = S ? game.choices(S) : []) {
+  async function deliver (id, emissions, S, { choices = S ? game.choices(S) : [], silent = false } = {}) {
     const chatId = chatOf(id)
+    const quietly = silent ? { disable_notification: true } : {}
     // What goes in the transcript, in the same shape the web client writes: a
     // chart as the URL of the file it was rendered to, not as bytes. A game
     // played here has to be readable there.
@@ -279,7 +284,7 @@ export function createBot ({
       }
 
       if (e.kind === 'text') {
-        await sendText(chatId, spoken(e), reply_markup)
+        await sendText(chatId, spoken(e), reply_markup, quietly)
         out.push(e)
         continue
       }
@@ -292,7 +297,7 @@ export function createBot ({
         if (!file) {
           // not drawn yet: play the line without the picture rather than nothing
           console.warn(`  ${chatId}: no file for art '${e.art}'`)
-          if (hasLine) await sendText(chatId, line, reply_markup)
+          if (hasLine) await sendText(chatId, line, reply_markup, quietly)
           continue
         }
         // The media goes on its own and the line follows as its own message.
@@ -307,7 +312,7 @@ export function createBot ({
             const webp = await stickerOf(file)
             await sendWithRetry(() => bot.api.sendSticker(chatId,
               new InputFile(webp, `${e.art}.webp`),
-              onMedia ? { reply_markup: onMedia } : {}), chatId)
+              { ...quietly, ...(onMedia ? { reply_markup: onMedia } : {}) }), chatId)
             sent = true
           } catch (err) {
             // A picture that will not convert should cost the scene its
@@ -321,9 +326,9 @@ export function createBot ({
           await action(chatId, moving ? 'upload_video' : 'upload_photo')
           const send = moving ? bot.api.sendAnimation.bind(bot.api) : bot.api.sendPhoto.bind(bot.api)
           await sendWithRetry(() => send(chatId, new InputFile(file),
-            onMedia ? { reply_markup: onMedia } : {}), chatId)
+            { ...quietly, ...(onMedia ? { reply_markup: onMedia } : {}) }), chatId)
         }
-        if (hasLine) await sendText(chatId, line, reply_markup)
+        if (hasLine) await sendText(chatId, line, reply_markup, quietly)
         continue
       }
 
@@ -336,15 +341,16 @@ export function createBot ({
         const { png, url } = await artifacts.chart(id, e)
         out.push({ ...e, png: url })
         if (!png) {
-          if (e.caption) await sendText(chatId, e.caption, reply_markup)
+          if (e.caption) await sendText(chatId, e.caption, reply_markup, quietly)
           continue
         }
         // A reading and the picture of it are one thing, so they travel as one
         // message. A caption over 1024 characters falls back to two.
         const cap = e.caption ? toHtml(e.caption) : null
         const fits = cap !== null && cap.length <= MAX_CAPTION
-        if (cap !== null && !fits) await sendText(chatId, e.caption, undefined)
+        if (cap !== null && !fits) await sendText(chatId, e.caption, undefined, quietly)
         await sendWithRetry(() => bot.api.sendPhoto(chatId, new InputFile(png, 'chart.png'), {
+          ...quietly,
           ...(fits ? { caption: cap, parse_mode: 'HTML' } : {}),
           ...(reply_markup ? { reply_markup } : {}),
         }), chatId)

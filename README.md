@@ -253,11 +253,16 @@ in, with no error anywhere.
 
 Once they are joined, a turn taken in the browser is also spoken into the chat -
 `host/mirror.mjs`, wired up in `server.mjs`, and only there, so `npm run web`
-and `npm run telegram` apart behave as they always did. It goes one way only:
-the browser replays the saved transcript whenever the page is opened, so a day
-played in Telegram is already there on the next reload. The chat is not sent a
-turn it cannot receive either - somebody who signed in on the website and never
-opened the chat costs one line in the log, because a bot may not speak first.
+and `npm run telegram` apart behave as they always did. It arrives silently,
+since the player is watching that same turn on the screen in front of them and
+a buzz about it is a notification nobody asked for; a turn the chat itself was
+asked for still rings.
+
+It goes one way only: the browser replays the saved transcript whenever the page
+is opened, so a day played in Telegram is already there on the next reload. And
+the chat is not sent a turn it cannot receive - somebody who signed in on the
+website and never opened the chat costs one line in the log, because a bot may
+not speak first.
 
 In the chat, every choice arrives as an inline button and as a token you could
 have typed, so the whole game is playable either way. Slash commands are

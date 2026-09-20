@@ -60,11 +60,12 @@ const text = (t) => [{ kind: 'text', text: t }]
 section('what crosses, and what does not')
 {
   const sent = []
-  const { mirrored, mirror } = rig({ to: async (id, em) => { sent.push([id, em[0].text]) } })
+  const { mirrored, mirror } = rig({ to: async (id, em, _S, opts) => { sent.push([id, em[0].text, opts]) } })
 
   const out = await mirrored('tg42', text('one'), { choices: [] })
   await mirror.drain()
   ok('a signed-in turn is said again in the chat', sent.length === 1 && sent[0][0] === 'tg42')
+  ok('and asks to arrive without a notification', sent[0][2]?.silent === true)
   ok('and the wrapped deliver still owns what the transcript keeps',
      out.length === 1 && out[0].seen === true && out[0].text === 'one')
 
@@ -138,7 +139,7 @@ section('the keyboard belongs to the turn, not to the session')
   const S = { choices: [{ token: 'a', label: 'first' }] }
   const seen = []
   const { mirrored, mirror } = rig({
-    to: async (id, em, _S, choices) => { await sleep(10); seen.push(choices.map((c) => c.token).join('')) },
+    to: async (id, em, _S, { choices }) => { await sleep(10); seen.push(choices.map((c) => c.token).join('')) },
   })
 
   await mirrored('tg42', text('one'), S)
@@ -217,7 +218,30 @@ section('the seam the chat client actually presents')
   ok('the text arrives', /lanyard/.test(msgs[0]?.payload?.text || ''))
   ok('and the buttons the turn ended with ride the last message',
      (msgs[0]?.payload?.reply_markup?.inline_keyboard || []).flat().length === 2)
+  ok('it is sent silently, the player being sat in front of it already',
+     msgs[0]?.payload?.disable_notification === true, JSON.stringify(msgs[0]?.payload))
   ok('nothing was logged as a failure', log.lines.length === 0, log.lines.join('|'))
+
+  // and the other half of that: a turn the chat itself was asked for is the
+  // one thing the player IS waiting on, so it still rings
+  sent.length = 0
+  await made.deliver('tg42', text('spoken to directly'), { choices })
+  const own = sent.filter((s) => s.method === 'sendMessage')
+  ok('a turn taken in the chat still arrives with its notification',
+     own.length === 1 && own[0].payload.disable_notification === undefined,
+     JSON.stringify(own[0]?.payload))
+
+  // Everything in a burst, not only its text: a picture that rang while the
+  // words did not would be the same interruption.
+  sent.length = 0
+  const chart = { kind: 'traces', n: 2, holdings: ['AA', 'BB'], priced: null, f: null,
+                  upto: 0, totalReadouts: 10, caption: 'AA @ 120G', title: 't' }
+  await mirrored('tg42', [{ kind: 'art', art: 'himbo', text: 'He is already talking' }, chart], { choices })
+  await mirror.drain()
+  const outbound = sent.filter((s) => s.method !== 'sendChatAction')
+  ok('every message of a mirrored burst is silent, pictures included',
+     outbound.length > 1 && outbound.every((s) => s.payload.disable_notification === true),
+     sent.map((s) => `${s.method}:${s.payload.disable_notification}`).join(' '))
 
   await rm(dir, { recursive: true, force: true })
 }

@@ -51,7 +51,11 @@ export function createMirror ({ game, log = console } = {}) {
 
     const prev = tails.get(id) || Promise.resolve()
     const next = prev
-      .then(() => to(id, emissions, S, choices))
+      // Silent: the burst goes into the chat without a notification, because
+      // the player is watching this same turn arrive in the browser and a buzz
+      // about what is already on their screen is one they did not ask for. It
+      // is there to be read later, or on a phone; it just does not interrupt.
+      .then(() => to(id, emissions, S, { choices, silent: true }))
       .then(() => { said.delete(id) })
       .catch((e) => {
         if (said.has(id)) return
