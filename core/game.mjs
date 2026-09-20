@@ -170,11 +170,14 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   const stepsLeft = (S) => Math.max(0, R.daySteps - S.dayStep)
   const bellDue = (S) => S.dayStep >= R.daySteps
 
-  /** Steps, said as steps however many there are. */
-  const inSteps = (n) => {
-    n = Math.max(0, Math.round(n))
-    return `${n} step${n === 1 ? '' : 's'}`
-  }
+  /**
+   * Steps, said as steps however many there are.
+   *
+   * What a step is CALLED is a writer's word, not the engine's - copy.yaml
+   * names it under `vocabulary.step`, beside the holding and the moment. The
+   * engine counts them and says nothing about what they are.
+   */
+  const inSteps = (n) => C.t('vocabulary.step', { n: Math.max(0, Math.round(n)) })
 
   /** Steps, said as days once there are enough of them to be worth it. */
   function describeSteps (n) {

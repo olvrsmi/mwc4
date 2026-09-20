@@ -439,7 +439,7 @@ section('the marketplace')
   const { game, S } = mk(60)
   await skipOpening(game, S)
   const m = await game.handle(S, 'm')
-  ok('the workshop opens from the offer', S.expect === 'market' && has(m, /workshop/) && has(m, /9 steps/))
+  ok('the workshop opens from the offer', S.expect === 'market' && has(m, /workshop/) && has(m, /9 neo-hours/))
   await game.handle(S, 'b')
   const r = await game.handle(S, '3')
   ok('buying upgrades', S.regenUnits === 3 && S.balance === 970 && has(r, /3 bought/))
@@ -464,13 +464,14 @@ section('help and status')
      S.expect === 'holding' && has(h, /Commands/) && texts(h).length === voice + 1, `${texts(h).length} lines`)
   const st = await game.handle(S, 'state')
   ok('status is its own message, and reads the day back mid-position',
-     has(st, /\*\*Status\*\*/) && has(st, /It's day 1, \d+ steps remaining/) &&
+     has(st, /\*\*Status\*\*/) && has(st, /It's day 1, \d+ neo-hours remaining/) &&
      has(st, /Your balance is \u20ac\$/) && !has(st, /\*\*Day 1\*\*/) && S.expect === 'holding')
   const junk = await game.handle(S, 'xyz')
   ok('junk mid-position is nudged', has(junk, /\*\*h\*\* to hold/) && S.run !== null)
   const empty = await game.handle(S, '   ')
   ok('nothing at all is answered', has(empty, /Say something/))
-  ok('describing steps', game.describeSteps(1) === '1 step' && game.describeSteps(9) === '9 steps' &&
+  ok('describing steps, in the writer\'s word for them',
+     game.describeSteps(1) === '1 neo-hour' && game.describeSteps(9) === '9 neo-hours' &&
      game.describeSteps(27) === '1 day' && game.describeSteps(54) === '2 days' && game.describeSteps(40) === '1.5 days')
 }
 

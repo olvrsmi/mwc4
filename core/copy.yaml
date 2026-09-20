@@ -167,7 +167,7 @@ scenes:
     {holding}: open @ {opened_at}, close @ {closed_at}
     Investment {stake} · return {returned}
 
-    {outcome} {profit}{#if forced}
+    **{outcome} {profit}**{#if forced}
     _Closed early: EOD._{/if}
 
   # {balance}
@@ -290,6 +290,15 @@ vocabulary:
   # buttons, and the labels drawn onto the plots - uses these.
   holding: "E{index}"
   moment: "t{index}"
+
+  # How a step of world time is counted out. One step of any world - t3 to t4,
+  # whether it was watched or held - is one of these, and a working day is 27
+  # of them. Anywhere the game says how much time is left, how long a clean-up
+  # takes or how long until a bit is whole again, it says it in these.
+  #
+  # {n} is the count. Enough of them and the game says "1 day" or "1.5 days"
+  # instead - that threshold is a day's length, and lives in the rules.
+  step: "{n} neo-hour{n|s::s}"
 
   # How heavily a holding is contracted - its share of what the specification
   # asks of the world. Least to most; add or remove a word and the bands
