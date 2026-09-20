@@ -589,8 +589,10 @@ sequences:
   # here unfinished without affecting anything.
   office: 
     - text: _You step out at floor 17 and fail to orient yourself, only when you pass the lift for the 4th or 5th time do you spot the door to office 178._
+      voice: player
 
     - text: _You push open the door and see Navinder stood staring out the window, he's the only other person in there_
+      voice: player
       choices:
         a:
           label: "Say 'hi'"        
@@ -604,6 +606,7 @@ sequences:
             ...
 
     - text: _You sit down at desk B and boot the terminal. You scan your pass when prompted, input the second and third factor authentications from your phone and watch, and put your first three fingers in the scanner_
+      voice: player
 
     - art: oldhead
       speaker: Navinder
@@ -747,10 +750,12 @@ sequences:
       choices:
         a:
           label: yes, thanks!
+          voice: player
           reply: |
             _you think so, anyway... you spotted a `/help` option you can use later at least_
         b:
           label: ask for a repeat
+          voice: player
           reply: |
             _You start to ask him to repeat but remember you spotted a `/help` option, you can just use that_
 
@@ -760,9 +765,11 @@ sequences:
       choices:
         a:
           label: seems normal
+          voice: player
           reply: |
             _You smile and nod as your head turns back to the terminal. Time to make some money._
         b:
           label: ignore the implications
+          voice: player
           reply: |
             _You smile and nod as your head turns back to the terminal. Time to make some money._
