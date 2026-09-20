@@ -37,9 +37,31 @@
 
   /* The header is as it was. */
   header{
-    max-width: 40em;
-    text-align: center;
-    margin: 0 auto 0.5em;
+    max-width: calc(var(--col) + 32px);     
+    margin: 0 auto 0.5em;    
+    padding: 0 16px;
+  }
+
+  #title{
+    display: flex;
+    align-content: space-between;
+    padding-top:1rem;
+  }
+    #title * {
+      flex-grow: 1;
+    }
+    #title h1{
+      font-size: inherit;
+      margin: 0;
+    }
+    #title div{
+      text-align: right;
+      font-style: italic;
+      color: var(--quiet);
+    }
+
+  #status{
+    display: none;
   }
 
   #log{
@@ -68,10 +90,19 @@
      is the full width either way. A chart keeps its own proportions - it is
      drawn 1024 wide and reading it is the game - and opens full size on a
      click, because the ladder and the footer do not survive the reduction. */
-  .shot{ border: 1px solid var(--ink); }
+  .shot{ border: 1px solid var(--ink); overflow: hidden;}
   .shot a{ display: block; }
-  .shot img{ display: block; width: 100%; height: 336px; object-fit: contain; }
-  .shot.chart img{ height: auto; }
+  .shot img{ 
+    display: block; 
+    width: 100%; 
+    height: 336px; 
+    object-fit: contain; 
+    filter: drop-shadow(0px 30px 100px rgba(255,255,255,0.3));
+  }
+  .shot.chart img{ 
+    height: auto; 
+    filter: none;
+  }
   .shot .missing{ display: block; padding: 8px var(--pad-x); color: var(--quiet); }
 
   /* ---- choices, and what a click leaves behind ------------------------- */
@@ -154,6 +185,13 @@
   #account{ flex: 1 1 auto; min-width: 0; color: var(--quiet); text-align: right; }
   #account iframe{ margin: 0.5em 0 0 auto; display: block; }
 
+  #credit{
+    color: var(--quiet); 
+  }
+  #credit a{
+    color: var(--quiet);
+  }
+
   /* Wide enough for margins beside the column: the two things that are not
      the game leave the flow and take a corner each. Below that there is no
      room beside it, so they stay in the dock under the input - start over on
@@ -162,12 +200,20 @@
     #extra{ margin-top: 0; }
     #reset{ position: fixed; bottom: 16px; right: 16px; }
     #account{ position: fixed; top: 16px; right: 16px; max-width: 16em; }
+    #credit{
+      position: fixed;
+      bottom: 16px;
+      left: 16px
+    }
   }
 </style>
 </head>
 <body>
   <header>
-    <h1>Mackenzie Walk Capital</h1>
+    <div id="title">
+      <h1>Mackenzie Walk Capital</h1>
+      <div>[beta] v0.5.11</div>
+    </div>
     <p id="status"></p>
   </header>
 
@@ -183,6 +229,9 @@
         <button id="reset" type="button" class="btn">start over</button>
         <div id="account"></div>
       </div>
+      <small id="credit">
+        by <a href="https://oliversmith.cc">oliver</a>
+      </small>
     </div>
   </div>
 
