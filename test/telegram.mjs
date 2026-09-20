@@ -281,7 +281,7 @@ section('/start, /restart and the commands')
   })
   const after = (await h.host.store.load(sessionId('42'))).session
   ok('/start on an existing chat does NOT wipe it', after.run !== null && after.balance === 500)
-  ok('it shows the standing instead', texts(h.sent).some((t) => /Day 1/.test(t)))
+  ok('it shows the standing instead', texts(h.sent).some((t) => /Status/.test(t)))
 
   h.sent.length = 0
   await h.bot.handleUpdate({

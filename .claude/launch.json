@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mw-fake",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": [
+        "-c",
+        "MW_MODEL=fake PORT=5099 MW_SECRET=dev-preview-secret MW_STATE_DIR=/private/tmp/claude-501/-Users-ojs-Desktop-moth-mackenziewalk-04/3e25b7aa-7584-4b78-bf36-1e1daeb6a5c7/scratchpad/state exec node client-http/server.mjs"
+      ],
+      "port": 5099
+    }
+  ]
+}

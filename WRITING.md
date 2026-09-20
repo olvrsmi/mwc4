@@ -4,7 +4,7 @@ Everything a player reads lives in `core/copy.yaml`. Nothing else needs
 touching to change a word, add a scene or move a beat, and the host re-reads
 the file on save, so an edit shows in the next message without a restart.
 
-Values in `{braces}` arrive already formatted: `{budget}` is `1,000G`,
+Values in `{braces}` arrive already formatted: `{budget}` is `€$1,000`,
 `{coherence}` is `0.999`. When prose needs to bend there are escape hatches -
 `{n} opportunit{n|s:y:ies}`, `{#if recovering} …{/if}`, `{#if x}a{:else}b{/if}`,
 `{balance_raw|money}` - but ordinary lines need none of them. Anywhere a list

@@ -158,12 +158,12 @@ closes with the books:
 
 | | |
 |---|---|
-| opening budget | 1,000G, never below 500G, never carried over |
+| opening budget | €$1,000, never below €$500, never carried over |
 | a day that clears 10% of its budget | tomorrow's budget rises 10% |
 | any other day, an idle one included | tomorrow's budget falls 5% |
 | out of money | the rest of the day is forfeit and the bell rings |
 | the seventh day, on probation | the week's profit must clear half of every budget the week was handed - 3,500 on an unchanged week, and it moves with the budget. A failed one starts the week again |
-| the seventh day, afterwards | a positive week pays 100G into a personal pot that cannot be staked |
+| the seventh day, afterwards | a positive week pays €$100 into a personal pot that cannot be staked |
 
 A position is opened with no end date on it: it runs a step at a time, for as
 long as the player keeps holding, and closes when they say so. Left open, it

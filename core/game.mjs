@@ -35,7 +35,7 @@
 // button is just a token the player could have typed.
 
 import {
-  DEFAULT_PRICE, basePrice, quote, priceReturn, valueFactor, prospectus, overview, euro,
+  DEFAULT_PRICE, basePrice, quote, priceReturn, valueFactor, prospectus, overview,
   money, signedMoney, pct, mulberry,
 } from './pricing.mjs'
 import * as story from './story.mjs'
@@ -170,6 +170,13 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
   const stepsLeft = (S) => Math.max(0, R.daySteps - S.dayStep)
   const bellDue = (S) => S.dayStep >= R.daySteps
 
+  /** Steps, said as steps however many there are. */
+  const inSteps = (n) => {
+    n = Math.max(0, Math.round(n))
+    return `${n} step${n === 1 ? '' : 's'}`
+  }
+
+  /** Steps, said as days once there are enough of them to be worth it. */
   function describeSteps (n) {
     n = Math.max(0, Math.round(n))
     if (n >= R.daySteps) {
@@ -177,7 +184,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       const s = Number.isInteger(d) ? String(d) : d.toFixed(1)
       return `${s} day${d === 1 ? '' : 's'}`
     }
-    return `${n} step${n === 1 ? '' : 's'}`
+    return inSteps(n)
   }
 
   /** One step of world time has passed. The qubit recovers only while it is watching. */
@@ -295,10 +302,12 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       floor: money(R.budgetFloor),
     }))]
     const gained = regen(S, R.nightSteps)
-    if (gained > 0.0005) {
-      out.push(text(C.t('scenes.time_passed',
-        { elapsed: 'A night', gained: `coherence +${gained.toFixed(3)}` })))
-    }
+    // said whether or not anything came back: a terminal already clean still
+    // spends the night doing this, and going home is what ends a day
+    out.push(text(C.t('scenes.night', {
+      elapsed: 'A night', gained: `coherence +${gained.toFixed(3)}`,
+      recovered: gained > 0.0005,
+    })))
     if (r.weekTotal !== null) {
       const ctx = {
         total: signedMoney(r.weekTotal), total_raw: r.weekTotal,
@@ -339,7 +348,14 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
    * bonus - and a writer should be able to see them side by side rather than
    * inside a conditional.
    */
-  function sceneMain (S) {
+  /**
+   * Where the player stands, as both messages that say it read it.
+   *
+   * The middle line - the week's arithmetic - is rendered here rather than
+   * inside either message, because the day block and `status` say the same
+   * sentence and a writer should only have to write it once.
+   */
+  function standing (S) {
     const recovering = S.coherence < 0.999
     const pl = S.balance - S.budget
     const made = weekMade(S)
@@ -347,15 +363,15 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     const short = target - made
     const week = {
       days_left: daysLeft(S),
-      target: euro(target), target_raw: target,
-      target_left: euro(Math.max(0, short)), target_left_raw: Math.max(0, short),
+      target: money(target), target_raw: target,
+      target_left: money(Math.max(0, short)), target_left_raw: Math.max(0, short),
       ahead: short <= 0,
-      surplus: euro(Math.max(0, -short)), surplus_raw: Math.max(0, -short),
-      made: euro(made), made_raw: made,
-      week_bonus: euro(R.weekBonus), week_bonus_raw: R.weekBonus,
-      pot: euro(S.bonus), pot_raw: S.bonus, has_pot: S.bonus > 0,
+      surplus: money(Math.max(0, -short)), surplus_raw: Math.max(0, -short),
+      made: money(made), made_raw: made,
+      week_bonus: money(R.weekBonus), week_bonus_raw: R.weekBonus,
+      pot: money(S.bonus), pot_raw: S.bonus, has_pot: S.bonus > 0,
     }
-    return [text(C.t('scenes.day', {
+    return {
       ...week,
       week_line: C.t(S.probation ? 'scenes.day_probation' : 'scenes.day_week', week),
       probation: S.probation,
@@ -364,13 +380,29 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       recovering,
       recovery: recovering ? describeSteps(stepsToFull(S)) : '',
       balance: money(S.balance), balance_raw: S.balance,
-      budget: euro(S.budget), budget_raw: S.budget,
+      budget: money(S.budget), budget_raw: S.budget,
       bonus: money(S.bonus), bonus_raw: S.bonus, has_bonus: S.bonus > 0,
       day: S.dayIndex + 1,
       day_left: describeSteps(stepsLeft(S)),
+      steps_left: inSteps(stepsLeft(S)),
       pl: signedMoney(pl), pl_raw: pl,
       upgrades: S.regenUnits,
-    }))]
+    }
+  }
+
+  function sceneMain (S) {
+    return [text(C.t('scenes.day', standing(S)))]
+  }
+
+  /**
+   * The same standing, asked for again mid-day.
+   *
+   * A day block is written once and then stays written, so by the third round
+   * the two numbers that move - what is left of the day and what is left of
+   * the budget - are no longer what it says. This is where they are read.
+   */
+  function sceneStatus (S) {
+    return [text(C.t('scenes.status', standing(S)))]
   }
 
   /** Three worlds, named and tickered, distinct within the offer. */
@@ -556,10 +588,16 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
       forced: false,
     }
     S.expect = 'holding'
+    // the quote it was taken at, from the pinned base - the same number the
+    // settle will say it opened at
+    const at = quote(S.run.base, S.world.readings[k][q], R.price)
     return [
-      text(C.t('scenes.staking', { stake: money(stake), target: q, holding: C.holding(q, S.world.holdings) })),
-      text(C.t('scenes.position_open', { target: q, holding: C.holding(q, S.world.holdings),
-                                         last: C.moment(S.world.readouts - 1), every: describeSteps(1) })),
+      text(C.t('scenes.position_open', {
+        target: q, holding: C.holding(q, S.world.holdings),
+        opened_at: money(at), opened_at_raw: at,
+        stake: money(stake), stake_raw: stake,
+        last: C.moment(S.world.readouts - 1), every: describeSteps(1),
+      })),
       openPanel(S),
     ]
   }
@@ -675,8 +713,8 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     // rendered in the opening has to render there too.
     S.vars = {
       ...(S.vars || {}),
-      daily_budget: euro(R.startBudget),
-      week_target: euro(R.startBudget * R.weekDays * R.probationShare),
+      daily_budget: money(R.startBudget),
+      week_target: money(R.startBudget * R.weekDays * R.probationShare),
     }
     // A game saved before the week's budgets were kept. The days already
     // closed are reckoned at today's, which is what the target does with the
@@ -760,7 +798,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
     if (['help', '?', '/help'].includes(cmd)) {
       return result(S, [...story.narrate(C, S, helpScene()), text(C.t('prompts.help'))])
     }
-    if (['state', 'status', '/status', '/state'].includes(cmd)) return result(S, sceneMain(S))
+    if (['state', 'status', '/status', '/state'].includes(cmd)) return result(S, sceneStatus(S))
 
     switch (S.expect) {
       case 'world': {
@@ -881,7 +919,7 @@ export function createGame ({ copy, model, rules = {}, random = Math.random } = 
         ;[...new Set([100, 250, 500, Math.floor(m / 2), m])]
           .filter((v) => v >= 1 && v <= m).sort((a, b) => a - b)
           .forEach((v) => push(`${v}`, C.t(v === m ? 'buttons.all_stake' : 'buttons.stake',
-            { amount: `${v.toLocaleString('en-GB')}G` })))
+            { amount: money(v) })))
         break
       }
       case 'target':

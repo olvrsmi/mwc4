@@ -106,5 +106,5 @@ await say(S, 'l')
 
 const s = game.summary(S)
 console.log(`\n  sent ${sent.text} text, ${sent.art} art, ${sent.charts} charts (${(sent.bytes / 1024 | 0)}KB)`)
-console.log(`  day ${s.day} step ${s.dayStep}/${s.daySteps} · budget ${s.budget}G · balance ${s.balance}G · coherence ${s.coherence} · expect '${s.expect}'`)
+console.log(`  day ${s.day} step ${s.dayStep}/${s.daySteps} · budget €$${s.budget} · balance €$${s.balance} · coherence ${s.coherence} · expect '${s.expect}'`)
 if (pngDir) console.log(`  charts written to ${pngDir}`)

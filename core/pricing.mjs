@@ -30,7 +30,7 @@
 
 export const DEFAULT_PRICE = {
   sigma: 0.5,     // how far a full swing of the value factor moves the quote
-  unit: 90,       // G, the price of an empty book
+  unit: 90,       // the price of an empty book
   gamma: 0.35,    // how hard the book is compressed into a price
   spread: 1.3,    // widest the issued float pulls a quote either way
   // What each axis is worth to a holding, over (<X>, <Y>, <Z>). Mirrored in
@@ -41,11 +41,10 @@ export const DEFAULT_PRICE = {
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 
-// `|| 0` collapses negative zero, which would otherwise print as "-0G"
-export const money = (v) => `${(Math.round(v) || 0).toLocaleString('en-GB')}G`
-// The firm keeps two sets of books. A quote is in G, because a market is; an
-// allowance, a target and a bonus are in euro-dollars, because the company is.
-export const euro = (v) => `€$${(Math.round(v) || 0).toLocaleString('en-GB')}`
+// Euro-dollars, the only unit the player is ever shown: a quote, a stake, a
+// balance and an allowance are all counted in it. `|| 0` collapses negative
+// zero, which would otherwise print as "€$-0".
+export const money = (v) => `€$${(Math.round(v) || 0).toLocaleString('en-GB')}`
 export const signedMoney = (v) => `${Math.round(v) > 0 ? '+' : ''}${money(v)}`
 export const pct = (m) => `${m >= 0 ? '+' : ''}${(m * 100).toFixed(1)}%`
 export const fmt3 = (v) => `${v >= 0 ? '+' : ''}${v.toFixed(3)}`

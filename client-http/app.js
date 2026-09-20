@@ -143,10 +143,10 @@ function renderChoices (list) {
 
 function renderStatus (s) {
   if (!s) { statusEl.textContent = ''; return }
-  let line = `Day ${s.day} · step ${s.dayStep}/${s.daySteps} · budget ${s.budget}G · balance ${s.balance}G · coherence ${s.coherence}`
-  if (s.bonus) line += ` · pot ${s.bonus}G`
+  let line = `Day ${s.day} · step ${s.dayStep}/${s.daySteps} · budget €$${s.budget} · balance €$${s.balance} · coherence ${s.coherence}`
+  if (s.bonus) line += ` · pot €$${s.bonus}`
   if (s.world) line += ` · in ${s.world.name} at t${s.world.readout}`
-  if (s.position) line += ` · holding ${s.position.holding} (${s.position.stake}G)`
+  if (s.position) line += ` · holding ${s.position.holding} (€$${s.position.stake})`
   if (s.probation) line += ` · probation, attempt ${s.attempts}`
   statusEl.textContent = line
 }
@@ -219,7 +219,7 @@ function showChoice (choose) {
   renderChoices([])
   const div = box()
   const line = (s) => `day ${s.day}, ${s.rounds} round${s.rounds === 1 ? '' : 's'} played, ` +
-                      `balance ${s.balance}G` + (s.world ? `, in ${esc(s.world)}` : '')
+                      `balance €$${s.balance}` + (s.world ? `, in ${esc(s.world)}` : '')
   div.innerHTML =
     '<b>You already have a game in Telegram.</b><br>' +
     'Only one can carry on. The other is kept on the server, but you will not be able to reach it from here.<br><br>' +

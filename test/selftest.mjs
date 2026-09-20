@@ -75,7 +75,7 @@ section('the copy engine')
   ok('conditionals, with else', c.t('c', { x: true }) === 'yes' && c.t('c', { x: 0 }) === 'no')
   ok('nested conditionals', c.t('g', { a: 1, b: 1 }) === 'AB' && c.t('g', { a: 1, b: 0 }) === 'A' && c.t('g', { a: 0, b: 1 }) === '')
   ok('a list picks by the injected random', c.t('d') === 'two')
-  ok('the money filter', c.t('e', { v: 1234.6 }) === '1,235G')
+  ok('the money filter', c.t('e', { v: 1234.6 }) === '\u20ac$1,235')
   ok('a missing key is visible, not fatal', c.t('nope').startsWith('[missing copy') && c.problems.some((p) => /nope/.test(p)))
   ok('an unsupplied placeholder is left in place and noted', c.t('f') === '{missing}' && c.problems.some((p) => /missing/.test(p)))
   ok('an unknown filter is noted and skipped', c.t('h', { v: 0.5 }) === '+50.0% 0.5' && c.problems.some((p) => /nope/.test(p)))
@@ -244,7 +244,7 @@ section('closing early')
   for (const t of ['1', 'i', '100', '0']) await g2.handle(T, t)
   const c = T.coherence
   const r2 = await g2.handle(T, 'c')
-  ok('closing before any held step returns the stake', T.balance === 1000 && T.coherence === c && has(r2, /profit 0G/))
+  ok('closing before any held step returns the stake', T.balance === 1000 && T.coherence === c && has(r2, /profit \u20ac\$0/))
 }
 
 // ---------------------------------------------------------------------------
@@ -259,7 +259,7 @@ section('the bell')
   await game.handle(S, 'h')
   const bell = await game.handle(S, 'h')
   ok('the bell closes the position where it stands', S.run === null && has(bell, /Closed early: EOD/))
-  ok('then the day', has(bell, /The bell/) && S.dayIndex === 1 && S.dayStep === 0)
+  ok('then the day', has(bell, /The Bell/) && S.dayIndex === 1 && S.dayStep === 0)
   ok('and only then the new day, on the new budget',
      texts(bell).findIndex((t) => /The bell/.test(t)) < texts(bell).findIndex((t) => /\*\*Day 2\*\*/.test(t)) &&
      has(bell, /budget of \u20ac\$950/) && has(bell, /6 days left of probation/))
@@ -429,7 +429,7 @@ section('running out of money')
   S.world.readings[1][0] = dear.map((x) => -x)
   const r = await game.handle(S, 'c')
   ok('losing the last G says so', has(r, /out of money/) && S.balance >= 500)
-  ok('and the rest of the day is forfeit', has(r, /The bell/) && S.dayIndex === 1 && S.dayStep === 0)
+  ok('and the rest of the day is forfeit', has(r, /The Bell/) && S.dayIndex === 1 && S.dayStep === 0)
   ok('with the next day offered', S.expect === 'world' && has(r, /\*\*Day 2\*\*/))
 }
 
@@ -463,7 +463,9 @@ section('help and status')
   ok('help reads the voice out and lists the keys, touching nothing',
      S.expect === 'holding' && has(h, /Commands/) && texts(h).length === voice + 1, `${texts(h).length} lines`)
   const st = await game.handle(S, 'state')
-  ok('status mid-position', has(st, /\*\*Day 1\*\*/) && S.expect === 'holding')
+  ok('status is its own message, and reads the day back mid-position',
+     has(st, /\*\*Status\*\*/) && has(st, /It's day 1, \d+ steps remaining/) &&
+     has(st, /Your balance is \u20ac\$/) && !has(st, /\*\*Day 1\*\*/) && S.expect === 'holding')
   const junk = await game.handle(S, 'xyz')
   ok('junk mid-position is nudged', has(junk, /\*\*h\*\* to hold/) && S.run !== null)
   const empty = await game.handle(S, '   ')
@@ -696,7 +698,7 @@ section('pricing and the sheet')
   ok('an unreadable holding prices at its listing price', quote(bases[2], [0, 0, 0]) === bases[2])
   const copy = createCopy(COPY)
   const sheet = overview(copy, { id: 'spec_sheet_01', n: 4, book: [0, 3, 6, 12], pairs: [[0, 1], [1, 2], [2, 3]], max_pairs: 6 }, ['AAA', 'BBB', 'CCC', 'DDD'])
-  ok('one row per holding, each priced', sheet.length === 4 && sheet.every((h) => /^[\d,]+G$/.test(h.price)))
+  ok('one row per holding, each priced', sheet.length === 4 && sheet.every((h) => /^\u20ac\$[\d,]+$/.test(h.price)))
   ok('a heavier book reads as more contracted', sheet[0].contracted !== sheet[3].contracted)
   ok('exposure names the holdings it is wired to', sheet[1].exposure === 'AAA, CCC')
   ok('the sheet carries no measure of how far a holding will move', !/range|volatil|inert/i.test(Object.keys(sheet[0]).join(' ')))

@@ -98,6 +98,27 @@ scenes:
     You have {days_left} day{days_left|s::s} left of the week and have made
     {made} so far. A week in profit pays {week_bonus} into your pot.
 
+  # What `status` answers, at any moment. The day block opens a day and then
+  # stays said; this is the same standing asked for again, mid-day, so it adds
+  # the two numbers that have moved since: how much of the day is left, and
+  # what is left of the budget.
+  #
+  # {week_line} is the same middle line the day block uses - see the two keys
+  # above - so the week's arithmetic is written once and read in both places.
+  #
+  # {day} {steps_left} {week_line} {budget} {coherence} {balance} {recovering}
+  # {recovery} {days_left} {target} {target_left} {ahead} {surplus} {made}
+  # {week_bonus} {pot} {has_pot} {pl} {upgrades} {probation}
+  status: |
+    **Status**
+    It's day {day}, {steps_left} remaining.
+
+    {week_line}
+
+    Today's budget was {budget}.
+    Your terminal's coherence is {coherence}{#if recovering} (recovery in {recovery}){/if}
+    Your balance is {balance}
+
   # no values
   offer: Three worlds are open to you.
 
@@ -123,25 +144,31 @@ scenes:
   # repeating that is a worse copy of the picture. What a chart says is drawn
   # on it - see `plots:` below.
 
-  # {stake} {holding}
-  staking: "{stake} on **{holding}**. Making investment."
+  # The whole of opening a position: one line, naming the holding and the
+  # quote it was taken at. What happens next is on the buttons.
+  #
+  # {holding} {opened_at} {stake} {target} {last} {every}
+  position_open: "Position open on {holding} @ {opened_at}. Holding."
 
-  # {holding} {last} {every}
-  position_open: "_Position open on **{holding}**. A reading every {every} — close whenever you like. The world runs to {last}._"
-
-  # {target} {opened_at} {closed_at} {change} {multiplier} {stake} {returned}
-  # {profit} {balance} {outcome} {coherence} {was_coherence} {flat} {drained}
+  # The two prices, the two amounts, and what it came to. What the trade cost
+  # the terminal is not here - {coherence} and {was_coherence} are supplied if
+  # a writer wants it back, and `status` carries it either way.
+  #
+  # {forced} is a position the bell closed rather than the player: without a
+  # word for it, being shut down at the end of the day reads exactly like
+  # choosing to close, which is the one thing the player did not do.
+  #
+  # {holding} {target} {opened_at} {closed_at} {change} {multiplier} {stake}
+  # {returned} {profit} {balance} {outcome} {coherence} {was_coherence}
+  # {flat} {drained} {forced}
   returns: |
     **Returns**
+
     {holding}: open @ {opened_at}, close @ {closed_at}
-    Change {change} · multiplier {multiplier}
+    Investment {stake} · return {returned}
 
-    Investment {stake} · return {returned} · **{outcome} {profit}**
-
-    Balance {balance}{#if flat} {/if}
-
-    Your coherence: {coherence} (was {was_coherence}){#if forced}
-    _Closed early: EOD._{/if}{#if drained} {/if}
+    {outcome} {profit}{#if forced}
+    _Closed early: EOD._{/if}
 
   # {balance}
   ask_stake: "How much do you stake? (1 – {balance})"
@@ -170,13 +197,19 @@ scenes:
   # {cost} {balance}
   cannot_afford: "An upgrade is {cost} and you have {balance}."
 
+  # The bell says what the day came to and what it costs you, in words rather
+  # than in a sum: the new budget is named in tomorrow's day block, which is
+  # the next thing the player reads.
+  #
+  # An idle day has no result to give and never clears the target, so it takes
+  # the cut like any other missed day.
+  #
   # {day} {pl} {good} {traded} {idle} {was_budget} {budget} {change} {floored} {floor}
   day_end: |
-    **The bell — day {day} closes**
+    **The Bell**
+    Day {day} closes.  {#if idle}You made no investments today.{:else}Result: {pl}{/if}
 
-    {#if idle}You made no investments today.{:else}Day's result: {pl}{/if}
-    Budget {was_budget} → **{budget}** ({change})
-    {#if floored}_Your budget cannot fall below {floor}._{/if}
+    {#if good}You reached your target for the day, and will have an increased budget tomorrow.{:else}You failed to reach your target for the day, your budget will be cut tomorrow.{/if}
 
   # {total} {paid} {bonus} {pot}
   week_end: |
@@ -201,8 +234,12 @@ scenes:
 
     Remember your investment bit will come back changed and you may need to wait for it to clean up ({recharge}).
 
-  # {elapsed} {gained}
-  time_passed: "{elapsed} passed: {gained}"
+  # The night, after the bell. It is said every day, not only on a day that
+  # spent the terminal: going home is what ends a day, and how much came back
+  # is the coherence the next day block opens on.
+  #
+  # {elapsed} {gained} {recovered}
+  night: "_You head home. Night passes, on your desk your terminal runs its self-improving subroutines and recovers coherence._"
 
 # One of these is chosen at random when a player writes during their own run.
 chatter:
@@ -280,7 +317,7 @@ plots:
   traces_title: "{world} - {moment}"
   # {world} {target} {change}
   traces_running: "{world} - {holding} running {change}"
-  traces_legend: "quote in G, log scale"
+  traces_legend: "log scale"
 
 # The places a player may be offered. Add, cut and rename freely.
 # Tickers for the holdings inside a world. Each world draws as many as it
