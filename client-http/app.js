@@ -319,7 +319,7 @@ function showLogin (botUsername) {
   s.setAttribute('data-request-access', 'write')
   s.setAttribute('data-onauth', 'onTelegramAuth(user)')
   accountEl.appendChild(s)
-  accountEl.appendChild($msg)
+  //accountEl.appendChild($msg)
 }
 
 function showAccount (r) {
@@ -341,7 +341,7 @@ function showAccount (r) {
       try { await show(await post('/api/auth/logout')) } finally { setBusy(false) }
     }
     accountEl.appendChild(out)
-    accountEl.appendChild($msg)
+    //accountEl.appendChild($msg)
     return
   }
   if (r.canLogin && r.botUsername) showLogin(r.botUsername)
