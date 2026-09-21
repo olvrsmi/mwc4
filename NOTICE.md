@@ -23,6 +23,13 @@ Regular. The OFL permits it; the reserved font name is untouched.
 private and neither is vendored here; see `model/requirements.txt` for how they
 are installed alongside.
 
+## The spinner — `client-http/waiting.gif`
+
+Not original: the file's own GIF comment records that it was made with
+ajaxload.info, a spinner generator. It is shown in the browser client while a
+turn is out at the Moth API, inverted by CSS so that it is light on the page's
+black.
+
 ## Everything else
 
 `core/`, `host/`, `client-http/`, `client-telegram/`, `test/`, `model/engine.py`

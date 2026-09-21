@@ -61,7 +61,7 @@ mackenziewalk_04/
     board.mjs        the leaderboard: one file, shared by everybody
     mirror.mjs       a browser turn said again in the chat, when both are on
     art/ fonts/      pictures the scenes name; the chart's typefaces
-  client-http/     a web page. server.mjs, index.html, app.js
+  client-http/     a web page. server.mjs, index.html, app.js, waiting.gif
   client-telegram/ a Telegram bot. bot.mjs, sticker.mjs
   test/            selftest, copy-check, dryrun, doctor
 ```

@@ -337,6 +337,10 @@ export function createWebServer ({
       if (req.method === 'GET') {
         if (url.pathname === '/' || url.pathname === '/index.html') return serveFile(res, HERE, 'index.html')
         if (url.pathname === '/app.js') return serveFile(res, HERE, 'app.js')
+        // The spinner. Cached, and preloaded by the page: it is wanted at
+        // exactly the moment the network is being slow, which is the worst
+        // moment to be fetching anything.
+        if (url.pathname === '/waiting.gif') return serveFile(res, HERE, 'waiting.gif', { cache: true })
         if (url.pathname.startsWith('/art/')) return serveFile(res, ART, url.pathname.slice(5), { cache: true })
         if (url.pathname.startsWith('/png/')) return serveFile(res, artifacts.pngDir, url.pathname.slice(5), { cache: true })
         if (url.pathname === '/api/health') {

@@ -136,7 +136,7 @@ function draw (v) {
   if (v.view === 'art') el = imageBox(v.url, v.art)
   else if (v.view === 'chart') el = imageBox(v.png, v.title || 'chart', { chart: true, full: v.png })
   else if (v.view === 'text') el = messageBox(v)
-  else if (v.view === 'said') { el = document.createElement('div'); el.appendChild(sayBox(v.text)) }
+  else if (v.view === 'said') { el = turnRow(); el.appendChild(sayBox(v.text)) }
   else { el = document.createElement('div'); el.className = 'msg game'; el.textContent = `[${v.kind}]` }
   log.appendChild(el)
   return el
@@ -237,6 +237,19 @@ function renderChoices (list) {
   pending = row
 }
 
+/**
+ * The row a turn is echoed on.
+ *
+ * Right-aligned like everything of the player's, and a flex row for one
+ * reason: the spinner stands at the end of it while the server is still
+ * answering. See showWaiting.
+ */
+function turnRow () {
+  const row = document.createElement('div')
+  row.className = 'turn'
+  return row
+}
+
 /** What the player chose, as the box it is drawn in. */
 function sayBox (line) {
   const said = document.createElement('div')
@@ -250,12 +263,12 @@ function echo (line) {
   const said = sayBox(line)
   if (pending) {
     // the button that was taken, resolving into the answer it gave
-    pending.className = ''
+    pending.className = 'turn'
     pending.replaceChildren(said)
     pending = null
     return
   }
-  const row = document.createElement('div')
+  const row = turnRow()
   row.appendChild(said)
   log.appendChild(row)
 }
@@ -279,6 +292,46 @@ async function post (path, body = {}) {
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error || `${res.status}`)
   return data
+}
+
+// ---------------------------------------------------------------------------
+// Waiting on the server
+//
+// Most turns are answered out of the rules and are back before the click has
+// finished. A few of them move the world, which means QDrive and the Moth API,
+// and those take seconds - seconds in which nothing on the page moves at all,
+// which reads as a page that has broken rather than as a game that is thinking.
+//
+// So a request slow to come back says so, beside the line the player just said.
+// The grace period is the point of the thing: a turn that lands at once must
+// not flash a spinner at anybody on the way past. Only `resync` goes without -
+// nobody asked for it, so nobody is told that it is happening.
+// ---------------------------------------------------------------------------
+
+/** How long a request may take before it is worth mentioning. */
+const GRACE = 250
+
+/** The spinner, where the waiting belongs. Returns how to take it away again. */
+function showWaiting () {
+  // beside what the player just said, when they said something; otherwise -
+  // the first load, signing in - on a row of its own at the foot of the log
+  const last = log.lastElementChild
+  const alone = !last || !last.classList.contains('turn')
+  const row = alone ? log.appendChild(turnRow()) : last
+  const spin = document.createElement('img')
+  spin.className = 'waiting'
+  spin.src = 'waiting.gif'
+  spin.alt = 'waiting'
+  row.appendChild(spin)
+  scroll()
+  return () => { spin.remove(); if (alone) row.remove() }
+}
+
+/** A request, with the waiting shown if it is slow to come back. */
+async function ask (path, body) {
+  let hide = null
+  const timer = setTimeout(() => { hide = showWaiting() }, GRACE)
+  try { return await post(path, body) } finally { clearTimeout(timer); if (hide) hide() }
 }
 
 /**
@@ -339,7 +392,7 @@ function showAccount (r) {
     out.onclick = async () => {
       if (busy) return
       setBusy(true)
-      try { await show(await post('/api/auth/logout')) } finally { setBusy(false) }
+      try { await show(await ask('/api/auth/logout')) } finally { setBusy(false) }
     }
     accountEl.appendChild(out)
     //accountEl.appendChild($msg)
@@ -378,7 +431,7 @@ function showChoice (choose) {
     b.onclick = async () => {
       if (busy) return
       setBusy(true)
-      try { await show(await post('/api/auth/claim', { keep })) } catch (e) {
+      try { await show(await ask('/api/auth/claim', { keep })) } catch (e) {
         trouble(`Could not finish signing in: ${e.message}`)
       } finally { setBusy(false); scroll() }
     }
@@ -393,7 +446,7 @@ window.onTelegramAuth = async (user) => {
   if (busy) return
   setBusy(true)
   try {
-    const r = await post('/api/auth/telegram', { user })
+    const r = await ask('/api/auth/telegram', { user })
     if (r.choose) return showChoice(r.choose)
     await show(r)
   } catch (e) {
@@ -455,12 +508,12 @@ async function preview (scene, vars = {}) {
   setBusy(true)
   try {
     if (!scene) {
-      const { scenes } = await post('/api/preview', {})
+      const { scenes } = await ask('/api/preview', {})
       console.log(`mw.preview(<name>) - ${scenes.length} scenes:\n  ${scenes.join('\n  ')}`)
       return scenes
     }
     log.innerHTML = ''
-    const r = await post('/api/preview', { scene, vars })
+    const r = await ask('/api/preview', { scene, vars })
     await renderBurst(r.emissions)
     renderChoices(r.choices)
     renderStatus(r.summary)
@@ -484,7 +537,7 @@ async function boot (reset = false) {
   previewing = null
   setBusy(true)
   try {
-    await show(await post(reset ? '/api/reset' : '/api/session'))
+    await show(await ask(reset ? '/api/reset' : '/api/session'))
   } catch (e) {
     trouble(`Could not reach the game: ${e.message}`)
   } finally {
@@ -528,7 +581,7 @@ async function say (token, label) {
   echo(label && label !== token ? `${label}` : labelFor(token))
   scroll()
   try {
-    const r = await post('/api/say', { text: token, preview: previewing })
+    const r = await ask('/api/say', { text: token, preview: previewing })
     // the game this browser was in is gone; what came back is a whole new one
     if (r.reopened) return await show(r)
     await renderBurst(r.emissions)

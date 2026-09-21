@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mackenzie Walk Capital</title>
+<!-- the spinner, fetched now rather than when the wait it stands for starts -->
+<link rel="preload" as="image" href="waiting.gif">
 <style>
   /* A dealing floor read down one column. The game talks down the left, the
      player and anything said about them answers down the right, and a picture
@@ -142,6 +144,27 @@
     border: 1px solid var(--ink);
     padding: 7px var(--pad-x);
     font-style: italic;
+  }
+  /* The row a turn is echoed on. It is a flex row for one reason: while the
+     server is still answering, the spinner stands at the end of it, beside
+     what the player just said. */
+  .turn{
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    position: relative;
+  }
+  /* The gif is drawn dark on white and this page is the other way round, so it
+     is inverted rather than redrawn: its white becomes the page's own black,
+     and the arc comes back light. Half of its 32, because it is a wait going
+     on and not a thing to look at. */
+  .waiting{
+    width: 16px;
+    height: 16px;
+    filter: invert(1);
+    position: absolute;
+    left: calc( 100% + 10px );
   }
 
   /* someone is still talking - see the pacing note in app.js */
