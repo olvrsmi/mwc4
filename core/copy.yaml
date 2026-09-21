@@ -790,6 +790,12 @@ sequences:
         Welcome to Mackenzie Walk Capital, a post AGI investment company focussed on Neo-markets. You'll need to make a significant profit in your first week to pass probation and impress the founders.
         
         Since AGI took off in late 2028 Neo-markets have become a significant focus of investment and it’s estimated that the number of these increasingly small markets (betting on the changes of atomic or subatomic systems) doubles every 3 days, and this rate of doubling has itself doubled in the last month. There are rumours, posts, unsubstantiated pieces of independent research, and even a few early Arxiv.org preprints that suggest that observing, modelling and investing in these systems is changing them, scare words like decoherence, collapse are beginning to float around the discourse.
+      choices:
+        a:
+          label: nod your head
+          voice: player
+          reply: |
+            _...it continues_
 
     - art: example_graph1
       speaker: Disembodied Voice
@@ -803,7 +809,12 @@ sequences:
         On entering the market the terminal gives you a readout of its structure followed by a graph of the current standing of all entities.
 
         You can invest straight away, observe the market's progress, or leave and choose another from the three. You must invest, MWC doesn't appreciate timidity. If you don't, you'll fail.
-
+      choices:
+        a:
+          label: look thoughtful
+          voice: player
+          reply: |
+            _...it keeps going_
      
 
     - art: example_graph2
@@ -816,6 +827,13 @@ sequences:
         This coupling can change the outcome of the market, and skilled traders can sense when and how to invest even if the entity doesn't look clasically profitable.
 
         The coupling also changes the state of your terminal, causing it to lose coherence and necessitating some recovery time, particularly from bad trades. You can spend €$ to speed this up in the in-terminal FOOMBERG™ store.
+      choices:
+        a:
+          label: stroke your chin
+          voice: player
+          reply: |
+            _...the voice ignores you and carries on_
+
 
     - speaker: Disembodied Voice
       text: |
@@ -829,6 +847,12 @@ sequences:
         - if not, it's reduced by 5%
         - you must make a profit of 5% or more of your weekly total budget - {week_target} at baseline, but subject to change as your budget does
         - if you fail you can keep trying, but normally only the nepo-hires have funds for that
+      choices:
+        a:
+          label: one final nod
+          voice: player
+          reply: |
+            _...the world fades back in_
 
   # --- the verdicts ---------------------------------------------------------
   #
