@@ -277,8 +277,18 @@ const helpNodes = lookup(`sequences.${HELP}`)
 if (!Array.isArray(helpNodes) || helpNodes.length === 0) {
   problems.push(`sequences.${HELP} is empty or missing - help reads it out (name another with help_scene:)`)
 } else {
-  const stops = helpNodes.map((n, i) => (n && (n.choices || n.ask) ? i : -1)).filter((i) => i >= 0)
-  if (stops.length) problems.push(`sequences.${HELP} node(s) ${stops.join(', ')} stop to ask something, but help only reads a scene out - nothing would hear the answer`)
+  // An `ask`, not a choice. Narrating reads the nodes' text out and nothing
+  // else, so a scene's choices - their labels, their replies - never reach the
+  // player who typed `help`: they are the beat the scene is performed at when
+  // it plays for real, and reading it back skips them along with the timing.
+  // So a help scene may pace itself with choices like any other. An `ask` is
+  // the node's own text putting a question to the player, and that does get
+  // read out - to nobody, since help is not in the scene to hear the answer,
+  // and the variable it would have set renders as its own name from there on.
+  // A node carrying both offers the choices and never asks, exactly as the
+  // engine reads it.
+  const stops = helpNodes.map((n, i) => (n && n.ask && !n.choices ? i : -1)).filter((i) => i >= 0)
+  if (stops.length) problems.push(`sequences.${HELP} node(s) ${stops.join(', ')} ask the player something, but help only reads a scene out - nothing would hear the answer`)
 }
 for (const id of copy.list('opening')) {
   if (!Array.isArray(lookup(`sequences.${id}`))) problems.push(`opening names '${id}', which is not a scene in sequences`)

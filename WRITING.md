@@ -227,8 +227,12 @@ Everything. A running scene has the floor: a command it does not recognise gets
 ### The help scene
 
 `help` reads one scene out again at any moment - mid-position, at the bell -
-without entering it, so that scene must not stop to ask anything. Name it with
-`help_scene:` at the top level; `voice` is assumed when absent.
+without entering it. Only the nodes' text is read out: the choices under them
+are the beat the scene is performed at when it plays for real, and reading it
+back skips them along with the timing, so a help scene may pace itself with
+choices like any other. It must not carry an `ask` - that question would be
+read out with nobody there to hear the answer. Name it with `help_scene:` at
+the top level; `voice` is assumed when absent.
 
 ### The verdicts
 
